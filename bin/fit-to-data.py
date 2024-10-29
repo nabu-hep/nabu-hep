@@ -33,21 +33,22 @@ def main(args):
 
     data = np.load(args.DATAPATH)
     X_train = data["X_train"]
-    bins = np.array([chi2.ppf(p, df=5) for p in np.arange(0.0, 1.1, 0.1)])
+    dim = X_train.shape[1]
+    bins = np.array([chi2.ppf(p, df=dim) for p in np.arange(0.0, 1.1, 0.1)])
 
     while True:
 
         key, subkey = jr.split(jr.key(np.random.randint(0, high=999999999999)))
         flow = masked_autoregressive_flow(
             subkey,
-            base_dist=Normal(jnp.zeros(X_train.shape[1])),
+            base_dist=Normal(jnp.zeros(dim)),
             transformer=None,  # RationalQuadraticSpline(knots=8, interval=4),
             nn_width=args.NNWIDTH,
             nn_depth=args.NNDEPTH,
             flow_layers=args.FLOWLAYERS,
             invert=True,
             nn_activation=jax.nn.relu,
-            permutation=list(reversed(range(5))),
+            permutation=list(reversed(range(dim))),
         )
 
         optimizer = optax.inject_hyperparams(optax.adam)(learning_rate=args.LR)
@@ -73,12 +74,12 @@ def main(args):
         gauss_test = np.array(jax.vmap(flow.bijection.inverse, in_axes=0)(data["X_test"]))
 
         hist = Histogram(
-            dim=5, bins=bins, max_val=20, vals=np.sum(gauss_test**2, axis=1)
+            dim=dim, bins=bins, max_val=20, vals=np.sum(gauss_test**2, axis=1)
         )
 
         chi2_analysis(
             gauss_test,
-            bins=np.array([chi2.ppf(p, df=5) for p in np.arange(0.0, 1, 0.1)] + [20.0]),
+            bins=np.array([chi2.ppf(p, df=dim) for p in np.arange(0.0, 1, 0.1)] + [20.0]),
             plot_name=os.path.join(args.OUTPATH, "chi2.png"),
         )
         eqx.tree_serialise_leaves(os.path.join(args.OUTPATH, "model.eqx"), flow)
