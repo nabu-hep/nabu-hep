@@ -150,15 +150,15 @@ if __name__ == "__main__":
         "--out-path",
         "-op",
         type=str,
-        help="Output path",
+        help="Output path, defaults to " + os.path.join(os.getcwd(), "results"),
         dest="OUTPATH",
-        default="./results",
+        default=os.path.join(os.getcwd(), "results"),
     )
     paths.add_argument(
         "--out-name",
         "-on",
         type=str,
-        help="Output name, default " + datetime.now().strftime("%b%d-%H-%M-%S"),
+        help="Output name, default to " + datetime.now().strftime("%b%d-%H-%M-%S"),
         dest="OUTNAME",
         default=datetime.now().strftime("%b%d-%H-%M-%S"),
     )
