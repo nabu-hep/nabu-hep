@@ -28,6 +28,7 @@ setup(
     license="MIT",
     package_dir={"": "src"},
     packages=find_packages(where="src"),
+    scripts=["bin/fit-to-data"],
     install_requires=requirements,
     python_requires=">=3.8",
     classifiers=[
