@@ -108,4 +108,4 @@ def chi2_analysis(
         plt.savefig(plot_name)
     else:
         plt.show()
-    plt.close()
+    plt.close("all")

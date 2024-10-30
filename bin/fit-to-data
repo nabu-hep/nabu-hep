@@ -27,7 +27,7 @@ def plot_history(losses, name):
     ax0.set_yscale("log")
     ax1.plot(losses["lr"])
     plt.savefig(name)
-    plt.close()
+    plt.close("all")
 
 
 def main(args):
