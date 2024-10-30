@@ -13,17 +13,19 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optax
 import yaml
-from analysis import Histogram, chi2, chi2_analysis
 from flowjax.distributions import Normal
-from flowjax.flows import masked_autoregressive_flow
-from flowjax.train import fit_to_data
+from scipy.stats import chi2
+
+from llhdflow import Histogram, chi2_analysis, fit, masked_autoregressive_flow
 
 
 def plot_history(losses, name):
-    plt.plot(losses["train"], label="train")
-    plt.plot(losses["val"], label="val")
-    plt.legend()
-    plt.yscale("log")
+    fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2, figsize=(9, 4))
+    ax0.plot(losses["train"], label="train")
+    ax0.plot(losses["val"], label="val")
+    ax0.legend()
+    ax0.yscale("log")
+    ax1.plot(losses["lr"])
     plt.savefig(name)
     plt.close()
 
@@ -34,7 +36,7 @@ def main(args):
     data = np.load(args.DATAPATH)
     X_train = data["X_train"]
     dim = X_train.shape[1]
-    bins = np.array([chi2.ppf(p, df=dim) for p in np.arange(0.0, 1.1, 0.1)])
+    bins = chi2.ppf(np.arange(0.0, 1.1, 0.1), df=dim)
 
     while True:
 
@@ -60,8 +62,7 @@ def main(args):
             end_value=args.MINLR,
         )
 
-        # initial
-        flow, losses = fit_to_data(
+        flow, losses = fit(
             key,
             flow,
             X_train,
@@ -79,7 +80,7 @@ def main(args):
 
         chi2_analysis(
             gauss_test,
-            bins=np.array([chi2.ppf(p, df=dim) for p in np.arange(0.0, 1, 0.1)] + [20.0]),
+            bins=np.where(np.isinf(bins), 20.0, bins),
             plot_name=os.path.join(args.OUTPATH, "chi2.png"),
         )
         eqx.tree_serialise_leaves(os.path.join(args.OUTPATH, "model.eqx"), flow)

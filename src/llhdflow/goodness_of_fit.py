@@ -1,10 +1,14 @@
 import warnings
-from dataclasses import dataclass
 from typing import Callable, Optional, Sequence, Tuple, Union
 
-import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import chi2, norm
+
+__all__ = ["Histogram"]
+
+
+def __dir__():
+    return __all__
 
 
 def sqrt_method(values, _):
@@ -65,21 +69,39 @@ def calculate_relative(method_fcn, values, variances):
     return np.abs(method_fcn(values, variances) - values)
 
 
-@dataclass
 class Histogram:
-    dim: int
-    bins: Union[int, np.ndarray]
-    vals: np.ndarray
-    max_val: Optional[float] = None
-    weights: np.ndarray = None
+    """
+    _summary_
 
-    def __post_init__(self):
-        if isinstance(self.bins, int):
-            self.bins = np.linspace(0, self.max_val, self.bins + 1)
-        self.bin_width = self.bins[1:] - self.bins[:-1]
-        if self.weights is None:
-            self.weights = np.ones(len(self.vals))
+    Args:
+        dim (``int``): _description_
+        bins (``Union[int, np.ndarray]``): _description_
+        vals (``np.ndarray``): _description_
+        max_val (``Optional[float]``, default ``None``): _description_
+        weights (``np.ndarray``, default ``None``): _description_
+    """
+
+    def __init__(
+        self,
+        dim: int,
+        bins: Union[int, np.ndarray],
+        vals: np.ndarray,
+        max_val: Optional[float] = None,
+        weights: np.ndarray = None,
+    ) -> None:
+        self.dim = dim
+        self.vals = vals
+        self.weights = weights or np.ones(len(self.vals))
         assert len(self.vals) == len(self.weights), "Invalid shape"
+
+        if isinstance(bins, int):
+            assert max_val is not None, "If bins are not defined, max_val is needed"
+            self.max_val = max_val
+            self.bins = np.linspace(0, self.max_val, self.bins + 1)
+        else:
+            self.max_val = max(self.bins)
+        self.bin_width = self.bins[1:] - self.bins[:-1]
+
         self.sumw = np.sum(self.weights)
         self.sumw2 = np.sum(self.weights**2)
 
@@ -94,10 +116,12 @@ class Histogram:
 
     @property
     def nbins(self) -> int:
+        """Number of bins"""
         return len(self.bins) - 1
 
     @property
     def bin_mask(self):
+        """Mask the values for each bin"""
         for left, right in self.bin_edges:
             yield (self.vals >= left) * (self.vals < right)
 
@@ -156,81 +180,3 @@ class Histogram:
                 sample_mask.append(bin_mask)
 
         return sum(sample_mask).astype(bool)
-
-
-def chi2_analysis(gaussian: np.ndarray, plot_name: str = None, **hist_kwargs) -> None:
-    hist = Histogram(
-        dim=gaussian.shape[1],
-        bins=hist_kwargs.get("bins", 100),
-        max_val=hist_kwargs.get("max_val", 20.0),
-        vals=np.sum(gaussian**2, axis=1),
-        weights=hist_kwargs.get("weights", None),
-    )
-
-    x = np.linspace(0, hist.max_val, 500)
-    chi2p = chi2.pdf(x, df=hist.dim)
-
-    fig = plt.figure()
-    size = fig.get_size_inches()
-    fig, (ax0, ax1) = plt.subplots(
-        2,
-        1,
-        sharex=True,
-        figsize=(size[0], size[1] * 1.25),
-        gridspec_kw={"height_ratios": [4, 1], "hspace": 0.05, "wspace": 0.0},
-    )
-
-    errors = {"yerr": hist.density * hist.yerr / hist.values}
-    # if len(np.unique(hist.bin_width)) != 1:
-    #     errors.update({"xerr": hist.xerr})
-
-    ax0.errorbar(
-        hist.bin_centers,
-        hist.density,
-        **errors,
-        fmt=".",
-        lw=1,
-        color="k",
-        elinewidth=1,
-        capsize=4,
-    )
-    ax0.set_yscale("log")
-
-    # plt.xlim([15,21])
-    ax0.set_xlim([-0.2, 20.2])
-    ax0.set_ylim([5e-4, 0.2])
-    ax0.plot(x, chi2p, color="tab:blue", label=rf"$\chi^2(\nu={hist.dim})$")
-
-    ymin, ymax = ax0.get_ylim()
-    ax0.set_ylim(ymin, ymax)
-    for cl in [0.68, 0.95, 0.99]:
-        p = chi2.isf(1.0 - cl, hist.dim)
-        ax0.plot(
-            [p] * 2,
-            [ax0.get_ylim()[0], chi2.pdf(p, df=hist.dim)],
-            color="tab:blue",
-            linestyle="--",
-        )
-        ax0.text(
-            p,
-            ymin * 1.2,
-            rf"${cl*100:.0f}\% " + r"{\rm\ CL}$",
-            ha="right",
-            va="bottom",
-            rotation=90,
-            fontsize=20,
-        )
-        ax1.axvline(p, color="gray", linestyle="--", zorder=0)
-
-    color = np.array(["gray"] * hist.nbins, dtype=object)
-    pull = hist.pull
-    color[(abs(pull) > 1) & (abs(pull) <= 3)] = "gold"
-    color[abs(pull) > 3] = "firebrick"
-    ax1.bar(hist.bin_centers, hist.pull, width=hist.bin_width, color=color.tolist())
-    ax1.set_ylim([-5, 5])
-
-    if plot_name is not None:
-        plt.savefig(plot_name)
-    else:
-        plt.show()
-    plt.close()
