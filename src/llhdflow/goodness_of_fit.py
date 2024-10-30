@@ -1,5 +1,5 @@
 import warnings
-from typing import Callable, Optional, Sequence, Tuple, Union
+from typing import Callable, Sequence, Tuple, Union
 
 import numpy as np
 from scipy.stats import chi2, norm
@@ -86,7 +86,7 @@ class Histogram:
         dim: int,
         bins: Union[int, np.ndarray],
         vals: np.ndarray,
-        max_val: Optional[float] = None,
+        max_val: float = None,
         weights: np.ndarray = None,
     ) -> None:
         self.dim = dim
@@ -97,9 +97,10 @@ class Histogram:
         if isinstance(bins, int):
             assert max_val is not None, "If bins are not defined, max_val is needed"
             self.max_val = max_val
-            self.bins = np.linspace(0, self.max_val, self.bins + 1)
+            self.bins = np.linspace(0, max_val, bins + 1)
         else:
-            self.max_val = max(self.bins)
+            self.bins = np.array(bins)
+            self.max_val = max(bins)
         self.bin_width = self.bins[1:] - self.bins[:-1]
 
         self.sumw = np.sum(self.weights)
