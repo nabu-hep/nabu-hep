@@ -24,8 +24,12 @@ def plot_history(losses, name):
     ax0.plot(losses["train"], label="train")
     ax0.plot(losses["val"], label="val")
     ax0.legend()
-    ax0.set_yscale("log")
+    if np.all(np.greater_equal(losses["train"], 0.0)) and np.all(
+        np.greater_equal(losses["train"], 0.0)
+    ):
+        ax0.set_yscale("log")
     ax1.plot(losses["lr"])
+    ax1.set_yscale("log")
     plt.savefig(name)
     plt.close("all")
 
