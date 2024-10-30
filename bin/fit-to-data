@@ -92,6 +92,7 @@ def main(args):
             np.savez_compressed(
                 os.path.join(args.OUTPATH, "gaussian.npz"), gauss=gauss_test
             )
+            os.rename(args.OUTPATH, args.OUTPATH + "-COMPLETE")
             break
 
         print(f"p-value {pval*100:.2f}% Current pull:", hist.pull)
