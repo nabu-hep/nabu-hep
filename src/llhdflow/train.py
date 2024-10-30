@@ -87,11 +87,11 @@ def fit(
     data = (x,) if condition is None else (x, condition)
     data = tuple(jnp.asarray(a) for a in data)
 
-    if loss_fn is None:
-        loss_fn = MaximumLikelihoodLoss()
+    loss_fn = loss_fn or MaximumLikelihoodLoss()
 
-    if optimizer is None:
-        optimizer = optax.inject_hyperparams(optax.adam)(learning_rate=learning_rate)
+    optimizer = optimizer or optax.inject_hyperparams(optax.adam)(
+        learning_rate=learning_rate
+    )
 
     params, static = eqx.partition(
         dist,
@@ -104,7 +104,11 @@ def fit(
     # train val split
     key, subkey = jr.split(key)
     train_data, val_data = train_val_split(subkey, data, val_prop=val_prop)
-    losses = {"train": [], "val": [], "lr": [learning_rate]}
+    losses = {
+        "train": [],
+        "val": [],
+        "lr": [float(opt_state.hyperparams["learning_rate"])],
+    }
 
     loop = tqdm(range(max_epochs), disable=not show_progress)
 
