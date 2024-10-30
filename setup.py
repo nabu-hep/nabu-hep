@@ -6,7 +6,7 @@ with open("README.md", mode="r", encoding="utf-8") as f:
 with open("src/llhdflow/_version.py", mode="r", encoding="UTF-8") as f:
     version = f.readlines()[-1].split()[-1].strip("\"'")
 
-requirements = ["flowjax==15.1.0", "scipy>=1.10.0", "matplotlib"]
+requirements = ["flowjax", "scipy>=1.10.0", "matplotlib"]
 
 setup(
     name="llhdflow",
