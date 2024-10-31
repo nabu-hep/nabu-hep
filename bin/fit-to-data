@@ -51,6 +51,7 @@ def main(args):
     while True:
 
         # check if there are any completed scans
+        # important in case of a parallel scans running at the same time
         if any("-COMPLETE" in fl for fl in os.listdir(os.path.split(args.OUTPATH)[0])):
             print("Found a completed scan.")
             break
