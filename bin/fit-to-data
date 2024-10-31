@@ -104,11 +104,35 @@ def main(args):
 
         pull = hist.pull
         pval = 1.0 - chi2.cdf(np.sum(pull**2), df=len(pull))
-        print(f"p-value {pval*100:.2f}% Current pull:", hist.pull)
+        print(
+            f"1-CDF(residuals) = {pval*100:.2f}%, Residuals per bin:"
+            + ", ".join(map(lambda x: f"{x:.2e}", pull))
+        )
         if pval >= 0.03:
             np.savez_compressed(
-                os.path.join(args.OUTPATH, "gaussian.npz"), gauss=gauss_test
+                os.path.join(args.OUTPATH, "deviations.npz"), deviations=gauss_test
             )
+            model_config = {
+                "flow_layers": args.FLOWLAYERS,
+                "nn_depth": args.NNDEPTH,
+                "nn_width": args.NNWIDTH,
+                "dim": dim,
+                "activation": "relu",
+                "transformer": args.TRANS,
+            }
+            if args.TRANS == "rsq":
+                model_config.update(
+                    {
+                        "transformer_kwargs": {
+                            "knots": args.KNOTS,
+                            "interval": args.INTERVAL,
+                        }
+                    }
+                )
+            with open(
+                os.path.join(args.OUTPATH, "model_config.yaml"), "w", encoding="utf-8"
+            ) as f:
+                yaml.safe_dump(model_config, f)
             os.rename(args.OUTPATH, args.OUTPATH + "-COMPLETE")
             break
 
