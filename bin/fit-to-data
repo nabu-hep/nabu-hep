@@ -84,7 +84,7 @@ def main(args):
 
         chi2_analysis(
             gauss_test,
-            bins=np.where(np.isinf(bins), 20.0, bins),
+            bins=np.hstack([chi2.ppf(np.arange(0.0, 1, 0.1), df=dim), [20.0]]),
             plot_name=os.path.join(args.OUTPATH, "chi2.png"),
         )
         eqx.tree_serialise_leaves(os.path.join(args.OUTPATH, "model.eqx"), flow)
