@@ -9,6 +9,7 @@ def chi2_analysis(
     deviations: np.ndarray,
     plot_name: str = None,
     event_prob_per_bin: float = None,
+    xerr: bool = False,
     **hist_kwargs,
 ) -> None:
     """
@@ -26,11 +27,12 @@ def chi2_analysis(
             weights (``np.ndarray``, default ``None``): event weights. default is 1 per event.
     """
     if event_prob_per_bin is not None:
-        bins = chi2.ppf(
-            np.linspace(0, 1, int(np.ceil(1 / event_prob_per_bin)) + 1),
-            df=deviations.shape[1],
+        bins = np.hstack(
+            [
+                chi2.ppf(np.arange(0.0, 1, 0.1), df=deviations.shape[1]),
+                [hist_kwargs.get("max_val", 20.0)],
+            ]
         )
-        bins = np.where(np.isinf(bins), hist_kwargs.get("max_val", 20.0), bins)
     else:
         bins = hist_kwargs.get("bins", 100)
 
@@ -40,6 +42,12 @@ def chi2_analysis(
         max_val=hist_kwargs.get("max_val", 20.0),
         vals=np.sum(deviations**2, axis=1),
         weights=hist_kwargs.get("weights", None),
+    )
+
+    hist_pval_test = Histogram(
+        dim=deviations.shape[1],
+        bins=chi2.ppf(np.arange(0.0, 1.1, 0.1), df=deviations.shape[1]),
+        vals=np.sum(deviations**2, axis=1),
     )
 
     x = np.linspace(0, hist.max_val, 500)
@@ -56,8 +64,8 @@ def chi2_analysis(
     )
 
     errors = {"yerr": hist.density * hist.yerr / hist.values}
-    # if len(np.unique(hist.bin_width)) != 1:
-    #     errors.update({"xerr": hist.xerr})
+    if len(np.unique(hist.bin_width)) != 1 and xerr:
+        errors.update({"xerr": hist.xerr})
 
     ax0.errorbar(
         hist.bin_centers,
@@ -68,16 +76,32 @@ def chi2_analysis(
         color="k",
         elinewidth=1,
         capsize=4,
+        label=r"${\rm transformed\ samples}$",
+        zorder=100,
     )
     ax0.set_yscale("log")
+    ax0.set_ylabel(r"${\rm Density}$")
+    ax1.set_xlabel(r"$||\vec{\beta}||_2$")
+    ax1.set_ylabel(r"${\rm Residuals}$")
 
-    # plt.xlim([15,21])
-    # ax0.set_xlim([-0.2, 20.2])
-    # ax0.set_ylim([5e-4, 0.2])
     ax0.plot(x, chi2p, color="tab:blue", label=rf"$\chi^2(\nu={hist.dim})$")
-
+    ax0.legend(fontsize=15)
     ymin, ymax = ax0.get_ylim()
-    ax0.set_ylim(ymin, ymax)
+    ymin = chi2.pdf(hist.max_val, df=hist.dim)
+    xmin, xmax = ax0.get_xlim()
+    ax0.set_ylim([ymin, ymax])
+    ax0.set_xlim([-0.5, hist_kwargs.get("max_val", 20.0) + 0.5])
+
+    pull = hist_pval_test.pull
+    pval = 1 - chi2.cdf(np.sum(pull**2), df=len(pull))
+    ax0.text(
+        0.1,
+        ymax * 1.15,
+        r"${\rm 1-CDF(Residuals) = " + f"{pval*100.:.1f}\%" + "}$",
+        color="darkred",
+        fontsize=15,
+    )
+
     for cl in [0.68, 0.95, 0.99]:
         p = chi2.isf(1.0 - cl, hist.dim)
         ax0.plot(
@@ -93,16 +117,16 @@ def chi2_analysis(
             ha="right",
             va="bottom",
             rotation=90,
-            fontsize=20,
+            fontsize=15,
         )
-        ax1.axvline(p, color="gray", linestyle="--", zorder=0)
+        ax1.axvline(p, color="tab:blue", linestyle="--", zorder=0)
 
     color = np.array(["gray"] * hist.nbins, dtype=object)
     pull = hist.pull
     color[(abs(pull) > 1.0) & (abs(pull) <= 3.0)] = "gold"
     color[abs(pull) > 3.0] = "firebrick"
     ax1.bar(hist.bin_centers, hist.pull, width=hist.bin_width, color=color.tolist())
-    ax1.set_ylim([-5, 5])
+    ax1.set_ylim([-3.1, 3.1])
 
     if plot_name is not None:
         plt.savefig(plot_name)
