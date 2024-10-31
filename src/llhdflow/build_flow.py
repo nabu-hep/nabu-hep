@@ -16,6 +16,17 @@ from jax.nn import relu, sigmoid
 from .maf import masked_autoregressive_flow
 
 
+class _tmp_path:
+    def __init__(self, path: Text):
+        self.path = path
+
+    def __enter__(self):
+        sys.path.insert(0, self.path)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        sys.path.remove(self.path)
+
+
 def build_flow(config_file: Text, model_file: Text, random_seed: int = 0) -> Transformed:
     """
     Build normalising flow model.
@@ -44,7 +55,9 @@ def build_flow(config_file: Text, model_file: Text, random_seed: int = 0) -> Tra
 
     transformer = {
         "affine": None,
-        "rqs": RationalQuadraticSpline(**flow_config.get("transformer_kwargs", {})),
+        "rqs": RationalQuadraticSpline(
+            **flow_config.get("transformer_kwargs", {"knots": 6, "interval": 4})
+        ),
     }[flow_config.get("transformer", "affine")]
 
     activation = {"relu": relu, "sigmoid": sigmoid}[flow_config.get("activation", "relu")]
@@ -101,8 +114,9 @@ def create_sampler(
                 f"Cannot find configuration file at {posterior_transform_file}"
             )
 
-        sys.path.append(str(posterior_transform_file.parent))
-        post_transform = importlib.import_module(posterior_transform_file.stem)
+        # sys.path.insert(0, posterior_transform_file.parent)
+        with _tmp_path(str(posterior_transform_file.parent)):
+            post_transform = importlib.import_module(posterior_transform_file.stem)
 
         assert transformer_name in dir(
             post_transform
@@ -112,7 +126,6 @@ def create_sampler(
             posterior_transformer = getattr(post_transform, transformer_name)()
         elif inspect.isfunction(getattr(post_transform, transformer_name)):
             posterior_transformer = getattr(post_transform, transformer_name)
-        sys.path.pop(sys.path.index(str(posterior_transform_file.parent)))
 
     def sampler(size: int, random_seed: int = 0) -> np.ndarray:
         """
@@ -127,5 +140,7 @@ def create_sampler(
             generated samples
         """
         return np.array(posterior_transformer(flow.sample(jr.key(random_seed), (size,))))
+
+    del sys.modules[posterior_transform_file.stem]
 
     return sampler
