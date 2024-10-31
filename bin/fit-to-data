@@ -42,6 +42,11 @@ def main(args):
     dim = X_train.shape[1]
     bins = chi2.ppf(np.arange(0.0, 1.1, 0.1), df=dim)
 
+    transformer = {
+        "affine": None,
+        "rqs": RationalQuadraticSpline(knots=args.KNOTS, interval=args.INTERVAL),
+    }[args.TRANS]
+
     while True:
 
         key, subkey = jr.split(jr.key(np.random.randint(0, high=999999999999)))
@@ -139,6 +144,33 @@ if __name__ == "__main__":
     )
     parameters.add_argument(
         "--epochs", "-e", type=int, default=600, help="Number of epochs", dest="EPOCHS"
+    )
+
+    ansatz = parser.add_argument_group("Ansatz")
+    ansatz.add_argument(
+        "--transformer",
+        "-t",
+        type=str,
+        default="affine",
+        choices=["affine", "rqs"],
+        help="Choices of transformers to be used in MAF, defaults to affine.",
+        dest="TRANS",
+    )
+    ansatz.add_argument(
+        "--knots",
+        "-k",
+        type=int,
+        default=6,
+        help="Knots for RQS only, defaults to 6",
+        dest="KNOTS",
+    )
+    ansatz.add_argument(
+        "--interval",
+        "-int",
+        type=int,
+        default=4,
+        help="Interval for RQS only, defaults to 4",
+        dest="INTERVAL",
     )
 
     dataset = parser.add_argument_group("Dataset")
