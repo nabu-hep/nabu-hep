@@ -114,7 +114,6 @@ def create_sampler(
                 f"Cannot find configuration file at {posterior_transform_file}"
             )
 
-        # sys.path.insert(0, posterior_transform_file.parent)
         with _tmp_path(str(posterior_transform_file.parent)):
             post_transform = importlib.import_module(posterior_transform_file.stem)
 

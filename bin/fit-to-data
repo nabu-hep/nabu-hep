@@ -108,7 +108,7 @@ def main(args):
             f"1-CDF(residuals) = {pval*100:.2f}%, Residuals per bin:"
             + ", ".join(map(lambda x: f"{x:.2e}", pull))
         )
-        if pval >= 0.03:
+        if pval >= args.PVALTHRES:
             np.savez_compressed(
                 os.path.join(args.OUTPATH, "deviations.npz"), deviations=gauss_test
             )
@@ -174,6 +174,14 @@ if __name__ == "__main__":
     )
     parameters.add_argument(
         "--epochs", "-e", type=int, default=600, help="Number of epochs", dest="EPOCHS"
+    )
+    parameters.add_argument(
+        "--pval-threshold",
+        "-pt",
+        type=float,
+        default=0.03,
+        help="Threshold for 1-CDF of the residuals, defaults to >= 0.03",
+        dest="PVALTHRES",
     )
 
     ansatz = parser.add_argument_group("Ansatz")
