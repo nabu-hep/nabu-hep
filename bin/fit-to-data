@@ -120,7 +120,7 @@ def main(args):
                 "activation": "relu",
                 "transformer": args.TRANS,
             }
-            if args.TRANS == "rsq":
+            if args.TRANS == "rqs":
                 model_config.update(
                     {
                         "transformer_kwargs": {
