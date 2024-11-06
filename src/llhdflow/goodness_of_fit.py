@@ -2,7 +2,7 @@ import warnings
 from typing import Callable, Sequence, Tuple, Union
 
 import numpy as np
-from scipy.stats import chi2, norm
+from scipy.stats import chi2, norm, kstest
 
 __all__ = ["Histogram"]
 
@@ -81,6 +81,21 @@ class Histogram:
         weights (``np.ndarray``, default ``None``): _description_
     """
 
+    __slots__ = [
+        "dim",
+        "vals",
+        "weights",
+        "max_val",
+        "bins",
+        "sumw",
+        "sumw2",
+        "values",
+        "variances",
+        "bin_weights",
+        "bin_width",
+        "_kstest",
+    ]
+
     def __init__(
         self,
         dim: int,
@@ -114,6 +129,7 @@ class Histogram:
         self.values = np.array(val)
         self.variances = np.array(var)
         self.bin_weights = self.values / self.sumw
+        self._kstest = None
 
     @property
     def nbins(self) -> int:
@@ -172,6 +188,20 @@ class Histogram:
             his.append(right - center)
         return np.array(los), np.array(his)
 
+    @property
+    def kstest_pval(self) -> float:
+        """Compute p-value for Kolmogorov-Smirnov test"""
+        if self._kstest is None:
+            self._kstest = kstest(self.vals, cdf=lambda x: chi2.cdf(x, df=self.dim))
+        return self._kstest.pvalue
+
+    @property
+    def residuals_pvalue(self) -> float:
+        """Compute the p-value for residuals"""
+        pull = self.pull
+        return 1.0 - chi2.cdf(np.sum(pull**2), df=len(pull))
+
+    @property
     def pull_mask(self, condition: Callable[[np.ndarray], Sequence[bool]]) -> np.ndarray:
         """Create a sample mask from the statistical pull"""
 

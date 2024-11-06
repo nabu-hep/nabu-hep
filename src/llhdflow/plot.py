@@ -37,7 +37,6 @@ def chi2_analysis(
         bins = hist_kwargs.get("bins", 100)
 
     chi2_test = np.sum(deviations**2, axis=1)
-    ks_result = kstest(chi2_test, cdf=lambda x: chi2.cdf(x, df=deviations.shape[1]))
 
     hist = Histogram(
         dim=deviations.shape[1],
@@ -84,7 +83,7 @@ def chi2_analysis(
     )
     ax0.set_yscale("log")
     ax0.set_ylabel(r"${\rm Density}$")
-    ax1.set_xlabel(r"$||\vec{\beta}||_2$")
+    ax1.set_xlabel(r"$||\vec{\beta}||^2$")
     ax1.set_ylabel(r"${\rm Residuals}$")
 
     ax0.plot(x, chi2p, color="tab:blue", label=rf"$\chi^2(\nu={hist.dim})$")
@@ -95,13 +94,12 @@ def chi2_analysis(
     ax0.set_ylim([ymin, ymax])
     ax0.set_xlim([-0.5, hist_kwargs.get("max_val", 20.0) + 0.5])
 
-    pull = hist_pval_test.pull
-    pval = 1 - chi2.cdf(np.sum(pull**2), df=len(pull))
     ax0.text(
         0.0,
         ymax * 1.15,
         r"${\rm 1-CDF(Residuals) = "
-        + f"{pval*100.:.1f}\%,\ KST\ p-value = {ks_result.pvalue*100:.1f}\%"
+        + f"{hist_pval_test.residuals_pvalue*100.:.1f}\%,\ "
+        + f" KST\ p-value = {hist_pval_test.kstest_pval*100:.1f}\%"
         + "}$",
         color="darkred",
         fontsize=12,

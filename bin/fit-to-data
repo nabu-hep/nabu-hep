@@ -92,17 +92,11 @@ def main(args):
         chi2_test = np.sum(gauss_test**2, axis=1)
 
         hist = Histogram(dim=dim, bins=bins, vals=chi2_test)
+        pval = hist.residuals_pvalue
+        kst_pval = hist.kstest_pval
+        goodness_of_fit_test = pval >= args.PVALTHRES and kst_pval >= args.PVALTHRES
 
-        pull = hist.pull
-        pval = 1.0 - chi2.cdf(np.sum(pull**2), df=len(pull))
-        ks_result = kstest(chi2_test, cdf=lambda x: chi2.cdf(x, df=dim))
-        goodness_of_fit_test = (
-            pval >= args.PVALTHRES and ks_result.pvalue >= args.PVALTHRES
-        )
-
-        print(
-            f"1-CDF(residuals) = {pval*100:.2f}%, KS p-val: {ks_result.pvalue*100:.2f}%"
-        )
+        print(f"1-CDF(residuals) = {pval*100:.2f}%, KS p-val: {kst_pval*100:.2f}%")
 
         # save only the best pval results
         if pval > best_pval or goodness_of_fit_test:
