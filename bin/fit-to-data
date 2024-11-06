@@ -13,9 +13,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optax
 import yaml
-from flowjax.distributions import Normal
 from flowjax.bijections import RationalQuadraticSpline
-from scipy.stats import chi2
+from flowjax.distributions import Normal
+from scipy.stats import chi2, kstest
 
 from llhdflow import Histogram, chi2_analysis, fit, masked_autoregressive_flow
 
@@ -41,15 +41,15 @@ def main(args):
     data = np.load(args.DATAPATH)
     X_train = data["X_train"]
     dim = X_train.shape[1]
-    bins = chi2.ppf(np.arange(0.0, 1.1, 0.1), df=dim)
+    bins = chi2.ppf(np.linspace(0.0, 1.0, int(np.ceil(1.0 / args.PROB)) + 1), df=dim)
 
     transformer = {
         "affine": None,
         "rqs": RationalQuadraticSpline(knots=args.KNOTS, interval=args.INTERVAL),
     }[args.TRANS]
 
+    best_pval = 0
     while True:
-
         # check if there are any completed scans
         # important in case of a parallel scans running at the same time
         if any("-COMPLETE" in fl for fl in os.listdir(os.path.split(args.OUTPATH)[0])):
@@ -89,26 +89,33 @@ def main(args):
         )
 
         gauss_test = np.array(jax.vmap(flow.bijection.inverse, in_axes=0)(data["X_test"]))
+        chi2_test = np.sum(gauss_test**2, axis=1)
 
-        hist = Histogram(
-            dim=dim, bins=bins, max_val=20, vals=np.sum(gauss_test**2, axis=1)
-        )
-
-        chi2_analysis(
-            gauss_test,
-            bins=np.hstack([chi2.ppf(np.arange(0.0, 1, 0.1), df=dim), [20.0]]),
-            plot_name=os.path.join(args.OUTPATH, "chi2.png"),
-        )
-        eqx.tree_serialise_leaves(os.path.join(args.OUTPATH, "model.eqx"), flow)
-        plot_history(losses, os.path.join(args.OUTPATH, "history.png"))
+        hist = Histogram(dim=dim, bins=bins, vals=chi2_test)
 
         pull = hist.pull
         pval = 1.0 - chi2.cdf(np.sum(pull**2), df=len(pull))
-        print(
-            f"1-CDF(residuals) = {pval*100:.2f}%, Residuals per bin:"
-            + ", ".join(map(lambda x: f"{x:.2e}", pull))
+        ks_result = kstest(chi2_test, cdf=lambda x: chi2.cdf(x, df=dim))
+        goodness_of_fit_test = (
+            pval >= args.PVALTHRES and ks_result.pvalue >= args.PVALTHRES
         )
-        if pval >= args.PVALTHRES:
+
+        print(
+            f"1-CDF(residuals) = {pval*100:.2f}%, KS p-val: {ks_result.pvalue*100:.2f}%"
+        )
+
+        # save only the best pval results
+        if pval > best_pval or goodness_of_fit_test:
+            best_pval = pval
+            chi2_analysis(
+                gauss_test,
+                bins=np.hstack([chi2.ppf(np.arange(0.0, 1.0, 0.1), df=dim), [20.0]]),
+                plot_name=os.path.join(args.OUTPATH, "chi2.png"),
+            )
+            eqx.tree_serialise_leaves(os.path.join(args.OUTPATH, "model.eqx"), flow)
+            plot_history(losses, os.path.join(args.OUTPATH, "history.png"))
+
+        if goodness_of_fit_test:
             np.savez_compressed(
                 os.path.join(args.OUTPATH, "deviations.npz"), deviations=gauss_test
             )
@@ -182,6 +189,14 @@ if __name__ == "__main__":
         default=0.03,
         help="Threshold for 1-CDF of the residuals, defaults to >= 0.03",
         dest="PVALTHRES",
+    )
+    parameters.add_argument(
+        "--prob-per-bin",
+        "-p",
+        type=float,
+        default=0.1,
+        help="Yield probability per bin for goodness of fit test, defaults to 0.1",
+        dest="PROB",
     )
 
     ansatz = parser.add_argument_group("Ansatz")

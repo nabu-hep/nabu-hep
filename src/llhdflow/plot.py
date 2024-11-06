@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import chi2
+from scipy.stats import chi2, kstest
 
 from .goodness_of_fit import Histogram
 
@@ -29,25 +29,28 @@ def chi2_analysis(
     if event_prob_per_bin is not None:
         bins = np.hstack(
             [
-                chi2.ppf(np.arange(0.0, 1, 0.1), df=deviations.shape[1]),
+                chi2.ppf(np.arange(0.0, 1, event_prob_per_bin), df=deviations.shape[1]),
                 [hist_kwargs.get("max_val", 20.0)],
             ]
         )
     else:
         bins = hist_kwargs.get("bins", 100)
 
+    chi2_test = np.sum(deviations**2, axis=1)
+    ks_result = kstest(chi2_test, cdf=lambda x: chi2.cdf(x, df=deviations.shape[1]))
+
     hist = Histogram(
         dim=deviations.shape[1],
         bins=bins,
         max_val=hist_kwargs.get("max_val", 20.0),
-        vals=np.sum(deviations**2, axis=1),
+        vals=chi2_test,
         weights=hist_kwargs.get("weights", None),
     )
 
     hist_pval_test = Histogram(
         dim=deviations.shape[1],
         bins=chi2.ppf(np.arange(0.0, 1.1, 0.1), df=deviations.shape[1]),
-        vals=np.sum(deviations**2, axis=1),
+        vals=chi2_test,
     )
 
     x = np.linspace(0, hist.max_val, 500)
@@ -95,11 +98,13 @@ def chi2_analysis(
     pull = hist_pval_test.pull
     pval = 1 - chi2.cdf(np.sum(pull**2), df=len(pull))
     ax0.text(
-        0.1,
+        0.0,
         ymax * 1.15,
-        r"${\rm 1-CDF(Residuals) = " + f"{pval*100.:.1f}\%" + "}$",
+        r"${\rm 1-CDF(Residuals) = "
+        + f"{pval*100.:.1f}\%,\ KST\ p-value = {ks_result.pvalue*100:.1f}\%"
+        + "}$",
         color="darkred",
-        fontsize=15,
+        fontsize=12,
     )
 
     for cl in [0.68, 0.95, 0.99]:
