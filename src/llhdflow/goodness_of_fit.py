@@ -180,13 +180,21 @@ class Histogram:
         return calculate_relative(method, self.values, self.variances)
 
     @property
-    def xerr(self):
-        """compute x error"""
-        los, his = [], []
-        for (left, right), center in zip(self.bin_edges, self.bin_centers):
-            los.append(center - left)
-            his.append(right - center)
-        return np.array(los), np.array(his)
+    def xerr(self) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        compute errors on the x-axis
+
+        Returns:
+            ``Tuple[np.ndarray, np.ndarray]``:
+            low and high errors
+        """
+        xerr = np.array(
+            [
+                [center - left, right - center]
+                for (left, right), center in zip(self.bin_edges, self.bin_centers)
+            ]
+        )
+        return xerr[:, 0], xerr[:, 1]
 
     @property
     def kstest_pval(self) -> float:
