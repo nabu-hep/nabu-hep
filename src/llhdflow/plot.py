@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import chi2, kstest
+from scipy.stats import chi2
 
 from .goodness_of_fit import Histogram
 
@@ -65,7 +65,7 @@ def chi2_analysis(
         gridspec_kw={"height_ratios": [4, 1], "hspace": 0.05, "wspace": 0.0},
     )
 
-    errors = {"yerr": hist.density * hist.yerr / hist.values}
+    errors = {"yerr": hist.yerr_density}
     if len(np.unique(hist.bin_width)) != 1 and xerr:
         errors.update({"xerr": hist.xerr})
 

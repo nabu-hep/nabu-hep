@@ -180,6 +180,11 @@ class Histogram:
         return calculate_relative(method, self.values, self.variances)
 
     @property
+    def yerr_density(self) -> Tuple[np.ndarray, np.ndarray]:
+        """Compute y-error for density distribution"""
+        return self.density * self.yerr / self.values
+
+    @property
     def xerr(self) -> Tuple[np.ndarray, np.ndarray]:
         """
         compute errors on the x-axis
