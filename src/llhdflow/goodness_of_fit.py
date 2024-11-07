@@ -2,7 +2,7 @@ import warnings
 from typing import Callable, Sequence, Tuple, Union
 
 import numpy as np
-from scipy.stats import chi2, norm, kstest
+from scipy.stats import chi2, kstest, norm
 
 __all__ = ["Histogram"]
 
@@ -214,7 +214,6 @@ class Histogram:
         pull = self.pull
         return 1.0 - chi2.cdf(np.sum(pull**2), df=len(pull))
 
-    @property
     def pull_mask(self, condition: Callable[[np.ndarray], Sequence[bool]]) -> np.ndarray:
         """Create a sample mask from the statistical pull"""
 
