@@ -94,7 +94,7 @@ def main(args):
         hist = Histogram(dim=dim, bins=bins, vals=chi2_test)
         pval = hist.residuals_pvalue
         kst_pval = hist.kstest_pval
-        goodness_of_fit_test = pval >= args.PVALTHRES and kst_pval >= args.PVALTHRES
+        goodness_of_fit_test = all(np.greater_equal([pval, kst_pval], args.PVALTHRES))
 
         print(f"1-CDF(residuals) = {pval*100:.2f}%, KS p-val: {kst_pval*100:.2f}%")
 
