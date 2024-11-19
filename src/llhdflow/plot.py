@@ -78,7 +78,7 @@ def chi2_analysis(
         color="k",
         elinewidth=1,
         capsize=4,
-        label=r"${\rm transformed\ samples}$",
+        label=r"${\rm Transformed\ samples}$",
         zorder=100,
     )
     ax0.set_yscale("log")
@@ -86,8 +86,10 @@ def chi2_analysis(
     ax1.set_xlabel(r"$||\vec{\beta}||^2$")
     ax1.set_ylabel(r"${\rm Residuals}$")
 
-    ax0.plot(x, chi2p, color="tab:blue", label=rf"$\chi^2(\nu={hist.dim})$")
-    ax0.legend(fontsize=15)
+    ax0.plot(
+        x, chi2p, color="tab:blue", label=r"$\chi^2({\rm DoF}= " + f"{hist.dim}" + ")$"
+    )
+    ax0.legend(fontsize=12.5)
     ymin, ymax = ax0.get_ylim()
     ymin = chi2.pdf(hist.max_val, df=hist.dim)
     xmin, xmax = ax0.get_xlim()
