@@ -70,15 +70,18 @@ def calculate_relative(method_fcn, values, variances):
 
 
 class Histogram:
-    """
+    r"""
     _summary_
 
     Args:
-        dim (``int``): _description_
-        bins (``Union[int, np.ndarray]``): _description_
-        vals (``np.ndarray``): _description_
-        max_val (``Optional[float]``, default ``None``): _description_
-        weights (``np.ndarray``, default ``None``): _description_
+        dim (``int``): number of features.
+        bins (``Union[int, np.ndarray]``): If integer, indicates number of bins, if array, indicates
+            bin edges.
+        vals (``np.ndarray``): Sum of the feature values that deviate from the
+            central Gaussian distriburion
+        max_val (``float``, default ``None``): Maximum value that histogram can take.
+            will only be used if ``bins`` input is ``int``.
+        weights (``np.ndarray``, default ``None``): weight per value. If ``None`` taken as ``1``.
     """
 
     __slots__ = [
