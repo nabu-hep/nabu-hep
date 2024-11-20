@@ -17,6 +17,8 @@ from .maf import masked_autoregressive_flow
 
 
 class _tmp_path:
+    """Add temporary path to the system"""
+
     def __init__(self, path: Text):
         self.path = path
 
@@ -84,6 +86,7 @@ def create_sampler(
     flow: Transformed,
     posterior_transform_file: Text = None,
     transformer_name: Text = "PosteriorTransform",
+    return_posterior_transformer: bool = False,
 ) -> Callable[[int], np.ndarray]:
     """
     Create sampler from normalising flow
@@ -94,6 +97,8 @@ def create_sampler(
             posterior transformation
         transformer_name (``Text``, default ``"PosteriorTransform"``): name of the class
             or the function that performs transformation
+        return_posterior_transformer (``bool``, default ``False``): Return posterior transformer
+            along with sampler.
 
     Raises:
         ``FileNotFoundError``: If ``posterior_transform_file`` file does not exist
@@ -141,5 +146,8 @@ def create_sampler(
         return np.array(posterior_transformer(flow.sample(jr.key(random_seed), (size,))))
 
     del sys.modules[posterior_transform_file.stem]
+
+    if return_posterior_transformer:
+        return sampler, posterior_transformer
 
     return sampler
