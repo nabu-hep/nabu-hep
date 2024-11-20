@@ -1,3 +1,4 @@
+from typing import Sequence
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import chi2
@@ -10,6 +11,7 @@ def chi2_analysis(
     plot_name: str = None,
     event_prob_per_bin: float = None,
     xerr: bool = False,
+    confidence_level: Sequence[float] = (0.68, 0.95, 0.99),
     **hist_kwargs,
 ) -> None:
     """
@@ -20,6 +22,8 @@ def chi2_analysis(
         plot_name (``str``, default ``None``): name of the plot
         event_prob_per_bin (``float``, default ``None``): event probability at each bin. This arg
             will resize the bins to ensure each bin has the same event probability.
+        confidence_level (``Sequence[float]``, default ``(0.68, 0.95, 0.99)``): vertical lines to be
+            added to the density plot showing the location of various confidence.
         hist_kwargs:
             bins (``int`` or ``np.ndarray``): if ``event_prob_per_bin`` is not given, number of bins
                 are needed. Default 100.
@@ -92,7 +96,6 @@ def chi2_analysis(
     ax0.legend(fontsize=12.5)
     ymin, ymax = ax0.get_ylim()
     ymin = chi2.pdf(hist.max_val, df=hist.dim)
-    xmin, xmax = ax0.get_xlim()
     ax0.set_ylim([ymin, ymax])
     ax0.set_xlim([-0.5, hist_kwargs.get("max_val", 20.0) + 0.5])
 
@@ -107,13 +110,14 @@ def chi2_analysis(
         fontsize=12,
     )
 
-    for cl in [0.68, 0.95, 0.99]:
+    for cl in confidence_level:
         p = chi2.isf(1.0 - cl, hist.dim)
         ax0.plot(
             [p] * 2,
             [ax0.get_ylim()[0], chi2.pdf(p, df=hist.dim)],
             color="tab:blue",
             linestyle="--",
+            lw=1,
         )
         ax0.text(
             p,
@@ -123,8 +127,9 @@ def chi2_analysis(
             va="bottom",
             rotation=90,
             fontsize=15,
+            color="darkred",
         )
-        ax1.axvline(p, color="tab:blue", linestyle="--", zorder=0)
+        ax1.axvline(p, color="tab:blue", linestyle="--", zorder=0, lw=1)
 
     color = np.array(["gray"] * hist.nbins, dtype=object)
     pull = hist.pull
