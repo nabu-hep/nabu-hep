@@ -4,6 +4,7 @@
 import argparse
 import os
 from datetime import datetime
+from typing import Dict, Text
 
 import equinox as eqx
 import jax
@@ -15,12 +16,12 @@ import optax
 import yaml
 from flowjax.bijections import RationalQuadraticSpline
 from flowjax.distributions import Normal
-from scipy.stats import chi2, kstest
+from scipy.stats import chi2
 
 from llhdflow import Histogram, chi2_analysis, fit, masked_autoregressive_flow
 
 
-def plot_history(losses, name):
+def plot_history(losses: Dict[Text, list], name: Text) -> None:
     fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2, figsize=(9, 4))
     ax0.plot(losses["train"], label="train")
     ax0.plot(losses["val"], label="val")
@@ -35,9 +36,94 @@ def plot_history(losses, name):
     plt.close("all")
 
 
-def main(args):
-    jax.config.update("jax_platform_name", "gpu")
+def test_routine(args):
+    """Execute test routine"""
+    data = np.load(args.DATAPATH)
+    X_train = data["X_train"]
+    dim = X_train.shape[1]
+    bins = chi2.ppf(np.linspace(0.0, 1.0, int(np.ceil(1.0 / 0.1)) + 1), df=dim)
 
+    transformer = {
+        "affine": None,
+        "rqs": RationalQuadraticSpline(knots=args.KNOTS, interval=args.INTERVAL),
+    }[args.TRANS]
+
+    key, subkey = jr.split(jr.key(42))
+    flow = masked_autoregressive_flow(
+        subkey,
+        base_dist=Normal(jnp.zeros(dim)),
+        transformer=transformer,
+        nn_width=args.NNWIDTH,
+        nn_depth=args.NNDEPTH,
+        flow_layers=args.FLOWLAYERS,
+        invert=True,
+        nn_activation=jax.nn.relu,
+        permutation=list(reversed(range(dim))),
+    )
+
+    optimizer = optax.inject_hyperparams(optax.adam)(learning_rate=args.LR)
+    scheduler = optax.exponential_decay(
+        init_value=args.LR,
+        transition_steps=25,
+        decay_rate=0.5,
+        staircase=True,
+        end_value=args.MINLR,
+    )
+
+    flow, losses = fit(
+        key,
+        flow,
+        X_train,
+        optimizer=optimizer,
+        max_epochs=args.EPOCHS,
+        max_patience=50,
+        lr_scheduler=scheduler,
+    )
+
+    gauss_test = np.array(jax.vmap(flow.bijection.inverse, in_axes=0)(data["X_test"]))
+    chi2_test = np.sum(gauss_test**2, axis=1)
+
+    hist = Histogram(dim=dim, bins=bins, vals=chi2_test)
+    pval = hist.residuals_pvalue
+    kst_pval = hist.kstest_pval
+
+    print(f"1-CDF(residuals) = {pval*100:.2f}%, KS p-val: {kst_pval*100:.2f}%")
+
+    chi2_analysis(
+        gauss_test,
+        bins=np.hstack([chi2.ppf(np.arange(0.0, 1.0, 0.1), df=dim), [20.0]]),
+        plot_name=os.path.join(args.OUTPATH, "chi2.png"),
+    )
+    eqx.tree_serialise_leaves(os.path.join(args.OUTPATH, "model.eqx"), flow)
+    plot_history(losses, os.path.join(args.OUTPATH, "history.png"))
+
+    np.savez_compressed(
+        os.path.join(args.OUTPATH, "deviations.npz"), deviations=gauss_test
+    )
+    model_config = {
+        "flow_layers": args.FLOWLAYERS,
+        "nn_depth": args.NNDEPTH,
+        "nn_width": args.NNWIDTH,
+        "dim": dim,
+        "activation": "relu",
+        "transformer": args.TRANS,
+    }
+    if args.TRANS == "rqs":
+        model_config.update(
+            {
+                "transformer_kwargs": {
+                    "knots": args.KNOTS,
+                    "interval": args.INTERVAL,
+                }
+            }
+        )
+    with open(
+        os.path.join(args.OUTPATH, "model_config.yaml"), "w", encoding="utf-8"
+    ) as f:
+        yaml.safe_dump(model_config, f)
+
+
+def main(args):
     data = np.load(args.DATAPATH)
     X_train = data["X_train"]
     dim = X_train.shape[1]
@@ -247,10 +333,28 @@ if __name__ == "__main__":
         default=datetime.now().strftime("%b%d-%H-%M-%S"),
     )
 
+    execution = parser.add_argument_group("Execution")
+    execution.add_argument(
+        "-gpu",
+        action="store_true",
+        default=False,
+        help="Run on GPU, defaults to False",
+        dest="GPU",
+    )
+    execution.add_argument(
+        "-test",
+        action="store_true",
+        default=False,
+        help="Run on the Test routine. This routine fixes the random seeds and executes the algorithm once.",
+        dest="TEST",
+    )
+
     args = parser.parse_args()
 
     if not os.path.isdir(args.OUTPATH):
         os.mkdir(args.OUTPATH)
+
+    args.OUTNAME = "TEST-RESULT" if args.TEST else args.OUTNAME
 
     args.OUTPATH = os.path.join(args.OUTPATH, args.OUTNAME)
     if not os.path.isdir(args.OUTPATH):
@@ -263,7 +367,12 @@ if __name__ == "__main__":
 
     arg_dict = vars(args)
     arg_dict.update({"HOSTNAME": os.environ.get("HOSTNAME", None)})
-    with open(os.path.join(args.OUTPATH, "config.yaml"), "w") as f:
+    with open(os.path.join(args.OUTPATH, "config.yaml"), "w", encoding="utf-8") as f:
         yaml.safe_dump(arg_dict, f)
 
-    main(args)
+    jax.config.update("jax_platform_name", "gpu" if args.GPU else "cpu")
+
+    if args.TEST:
+        test_routine(args)
+    else:
+        main(args)
