@@ -1,5 +1,5 @@
 """Masked Autoregressive Flow"""
-from typing import Callable
+from collections.abc import Callable
 
 import equinox as eqx
 import jax

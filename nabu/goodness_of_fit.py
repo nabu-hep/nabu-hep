@@ -1,5 +1,6 @@
 import warnings
-from typing import Callable, Sequence, Tuple, Union
+from typing import Tuple, Union
+from collections.abc import Callable, Sequence
 
 import numpy as np
 from scipy.stats import chi2, kstest, norm
@@ -102,7 +103,7 @@ class Histogram:
     def __init__(
         self,
         dim: int,
-        bins: Union[int, np.ndarray],
+        bins: int | np.ndarray,
         vals: np.ndarray,
         max_val: float = None,
         weights: np.ndarray = None,
@@ -173,7 +174,7 @@ class Histogram:
         return (expected - self.values) / np.sqrt(self.variances)
 
     @property
-    def yerr(self) -> Tuple[np.ndarray, np.ndarray]:
+    def yerr(self) -> tuple[np.ndarray, np.ndarray]:
         """Compute y-error"""
         method = (
             poisson_interval
@@ -183,12 +184,12 @@ class Histogram:
         return calculate_relative(method, self.values, self.variances)
 
     @property
-    def yerr_density(self) -> Tuple[np.ndarray, np.ndarray]:
+    def yerr_density(self) -> tuple[np.ndarray, np.ndarray]:
         """Compute y-error for density distribution"""
         return self.density * self.yerr / self.values
 
     @property
-    def xerr(self) -> Tuple[np.ndarray, np.ndarray]:
+    def xerr(self) -> tuple[np.ndarray, np.ndarray]:
         """
         compute errors on the x-axis
 

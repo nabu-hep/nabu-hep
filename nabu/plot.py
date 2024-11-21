@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import chi2
