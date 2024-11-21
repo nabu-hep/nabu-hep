@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import argparse
 import os
@@ -21,7 +20,7 @@ from scipy.stats import chi2
 from nabu import Histogram, chi2_analysis, fit, masked_autoregressive_flow
 
 
-def plot_history(losses: Dict[Text, list], name: Text) -> None:
+def plot_history(losses: dict[str, list], name: str) -> None:
     fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2, figsize=(9, 4))
     ax0.plot(losses["train"], label="train")
     ax0.plot(losses["val"], label="val")

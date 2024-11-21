@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Iterator
+from collections.abc import Iterator
 
 import equinox as eqx
 import jax.numpy as jnp

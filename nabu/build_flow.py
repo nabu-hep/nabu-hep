@@ -2,7 +2,8 @@ import importlib
 import inspect
 import sys
 from pathlib import Path
-from typing import Callable, Text
+from typing import Text
+from collections.abc import Callable
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -19,7 +20,7 @@ from .maf import masked_autoregressive_flow
 class _tmp_path:
     """Add temporary path to the system"""
 
-    def __init__(self, path: Text):
+    def __init__(self, path: str):
         self.path = path
 
     def __enter__(self):
@@ -29,7 +30,7 @@ class _tmp_path:
         sys.path.remove(self.path)
 
 
-def build_flow(config_file: Text, model_file: Text, random_seed: int = 0) -> Transformed:
+def build_flow(config_file: str, model_file: str, random_seed: int = 0) -> Transformed:
     """
     Build normalising flow model.
 
@@ -84,8 +85,8 @@ def build_flow(config_file: Text, model_file: Text, random_seed: int = 0) -> Tra
 
 def create_sampler(
     flow: Transformed,
-    posterior_transform_file: Text = None,
-    transformer_name: Text = "PosteriorTransform",
+    posterior_transform_file: str = None,
+    transformer_name: str = "PosteriorTransform",
     return_posterior_transformer: bool = False,
 ) -> Callable[[int], np.ndarray]:
     """
