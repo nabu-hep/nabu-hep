@@ -2,7 +2,7 @@
 import numpy as np
 from scipy.stats import chi2
 
-from llhdflow import Histogram
+from nabu import Histogram
 
 
 def test_fit_script_output():
