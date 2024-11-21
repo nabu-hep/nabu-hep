@@ -67,7 +67,7 @@ def masked_autoregressive_flow(
     """
     Parameterises a transformer bijection with an autoregressive neural network.
     Refs: https://arxiv.org/abs/1606.04934; https://arxiv.org/abs/1705.07057v4.
-    
+
     based on flowjax construction with minor changes such as permutation option.
 
     Args:
