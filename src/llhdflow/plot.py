@@ -103,8 +103,8 @@ def chi2_analysis(
         0.0,
         ymax * 1.15,
         r"${\rm 1-CDF(Residuals) = "
-        + f"{hist_pval_test.residuals_pvalue*100.:.1f}\%,\ "
-        + f" KST\ p-value = {hist_pval_test.kstest_pval*100:.1f}\%"
+        + rf"{hist_pval_test.residuals_pvalue*100.:.1f}\%,\ "
+        + rf" KST\ p-value = {hist_pval_test.kstest_pval*100:.1f}\%"
         + "}$",
         color="darkred",
         fontsize=12,
