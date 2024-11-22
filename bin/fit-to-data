@@ -3,7 +3,6 @@
 import argparse
 import os
 from datetime import datetime
-from typing import Dict, Text
 
 import equinox as eqx
 import jax
