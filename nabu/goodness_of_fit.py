@@ -20,15 +20,9 @@ def poisson_interval(
     sumw2: np.ndarray,
     coverage: float = norm.cdf(1) - norm.cdf(-1),  # 0.6826894921370859 -> 1sigma
 ):
-    """Frequentist coverage interval for Poisson-distributed observations
-    Parameters
-    ----------
-        sumw : numpy.ndarray
-            Sum of weights vector
-        sumw2 : numpy.ndarray
-            Sum weights squared vector
-        coverage : float, optional
-            Central coverage interval, defaults to 68%
+    """
+    Frequentist coverage interval for Poisson-distributed observations
+
     Calculates the so-called 'Garwood' interval,
     c.f. https://www.ine.pt/revstat/pdf/rs120203.pdf or
     http://ms.mcmaster.ca/peter/s743/poissonalpha.html
@@ -38,7 +32,13 @@ def poisson_interval(
     proper treatment. When a bin is zero, the scale of the nearest nonzero bin is
     substituted to scale the nominal upper bound.
     If all bins zero, a warning is generated and interval is set to ``sumw``.
-    # Taken from Coffea
+    Taken from Coffea
+
+    Args:
+        sumw (``np.ndarray``): Sum of weights vector
+        sumw2 (``np.ndarray``): Sum weights squared vector
+        coverage (``float``, default ``norm.cdf(1)-norm.cdf(-1)``):
+            Central coverage interval, defaults to 68%
     """
     scale = np.empty_like(sumw)
     scale[sumw != 0] = sumw2[sumw != 0] / sumw[sumw != 0]
