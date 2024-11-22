@@ -1,5 +1,4 @@
 import warnings
-from typing import Tuple, Union
 from collections.abc import Callable, Sequence
 
 import numpy as np
