@@ -1,90 +1,49 @@
-from collections.abc import Sequence
+from jax import vmap
+from flowjax.distributions import Transformed
 
-import jax.numpy as jnp
-import jax.random as jr
-from flowjax.bijections import RationalQuadraticSpline
-from flowjax.distributions import Normal
-from jax.nn import relu, sigmoid, tanh
-
-from nabu.maf import masked_autoregressive_flow
 from nabu.transform_base import PosteriorTransform
 
 from .likelihood_base import LikelihoodBase
 
 
-class MAFLikelihood(LikelihoodBase):
-    """
-    Likelihood constructed with Masked Autoregressive Flow
+class FlowLikelihood(LikelihoodBase):
+    model_type: str = "flow"
 
-    Args:
-        dim (``int``): _description_
-        transformer (``str``, default ``"affine"``): _description_
-        activation (``str``, default ``"relu"``): _description_
-        nn_width (``int``, default ``64``): _description_
-        nn_depth (``int``, default ``2``): _description_
-        flow_layers (``int``, default ``8``): _description_
-        permutation (``Sequence[int]``, default ``None``): _description_
-        random_seed (``int``, default ``0``): _description_
-        posterior_transform (``PosteriorTransform``, default ``None``): _description_
-        transformer_kwargs (``dict``, default ``None``): _description_
-    """
-
-    model_type: str = "nflow"
-    __slots__ = ["_meta"]
+    __slots__ = ["_metadata"]
 
     def __init__(
         self,
-        dim: int,
-        transformer: str = "affine",
-        activation: str = "relu",
-        nn_width: int = 64,
-        nn_depth: int = 2,
-        flow_layers: int = 8,
-        permutation: Sequence[int] = None,
-        random_seed: int = 0,
-        posterior_transform: PosteriorTransform = None,
-        transformer_kwargs: dict = None,
-        **kwargs,
+        model: Transformed,
+        metadata: dict,
+        posterior_transform: PosteriorTransform = PosteriorTransform(),
     ):
-        transformer_kwargs = transformer_kwargs or {}
-        self._meta = dict(
-            type="maf",
-            dim=dim,
-            transformer=transformer,
-            activation=activation,
-            nn_width=nn_width,
-            nn_depth=nn_depth,
-            flow_layers=flow_layers,
-            permutation=permutation or list(reversed(range(dim))),
-            transformer_kwargs=transformer_kwargs,
-        )
-        transformer = {
-            "affine": None,
-            "rqs": RationalQuadraticSpline(
-                knots=transformer_kwargs.get("knots", 6),
-                interval=transformer_kwargs.get("interval", 4),
-            ),
-        }[transformer]
-
-        activation = {"relu": relu, "sigmoid": sigmoid, "tanh": tanh}[activation]
-
-        model = masked_autoregressive_flow(
-            jr.key(random_seed),
-            base_dist=Normal(jnp.zeros(dim)),
-            transformer=transformer,
-            nn_width=nn_width,
-            nn_depth=nn_depth,
-            flow_layers=flow_layers,
-            invert=True,
-            nn_activation=activation,
-            permutation=permutation or list(reversed(range(dim))),
-        )
+        self._metadata = metadata
 
         super().__init__(
             model=model,
-            posterior_transform=posterior_transform or PosteriorTransform(),
-            **kwargs,
+            posterior_transform=posterior_transform,
         )
 
-    def serialise(self) -> dict:
-        return self._meta
+    __dict__ = LikelihoodBase.__dict__
+
+    def to_dict(self) -> dict:
+        return self._metadata
+
+    def inverse(self) -> Transformed:
+        return vmap(self.model.bijection.inverse, in_axes=0)
+
+    def __repr__(self) -> str:
+        name = list(self._metadata.keys())[0]
+        txt = name + "(\n"
+        for key, item in self._metadata[name].items():
+            txt += f"    {key}="
+            if isinstance(item, dict):
+                nm = list(item.keys())[0]
+                txt += f"{nm}("
+                for child_key, child_item in item[nm].items():
+                    txt += f"{child_key} = {child_item}, "
+                txt += ")"
+            else:
+                txt += f"{item}"
+            txt += ",\n"
+        return txt + ")"

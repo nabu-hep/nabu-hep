@@ -1,27 +1,28 @@
 import json
-from abc import ABC
+from abc import ABC, abstractmethod
 from pathlib import Path
 
 import equinox as eqx
 import jax.random as jr
 import numpy as np
 
+from nabu.transform_base import PosteriorTransform
+from nabu import __version__
+
 
 class LikelihoodBase(ABC):
-    model_type: str = "__unknown_model__"
-    __slots__ = ["_model", "_posterior_transform", "notes", "version"]
+    model_type: str = "base"
+    """Model type"""
+
+    __slots__ = ["_model", "_posterior_transform"]
 
     def __init__(
         self,
         model,
         posterior_transform,
-        notes: str = None,
-        version: str = "0.0.1",
     ):
         self._model = model
         self._posterior_transform = posterior_transform
-        self.notes = notes
-        self.version = version
 
     @property
     def model(self):
@@ -30,6 +31,7 @@ class LikelihoodBase(ABC):
 
     @model.setter
     def model(self, model):
+        assert hasattr(model, "log_prob") and hasattr(model, "sample"), "Invalid model"
         self._model = model
 
     @property
@@ -37,9 +39,25 @@ class LikelihoodBase(ABC):
         """Retreive Posterior transformer"""
         return self._posterior_transform
 
-    def serialise(self) -> dict:
-        """Serialise the likelihood"""
-        raise NotImplementedError
+    @transform.setter
+    def transform(self, ptransform: PosteriorTransform):
+        assert isinstance(ptransform, PosteriorTransform), "Invalid input"
+        self._posterior_transform = ptransform
+
+    @abstractmethod
+    def to_dict(self) -> dict:
+        """convert model to dictionary"""
+
+    @abstractmethod
+    def inverse(self):
+        """return inverse of the model"""
+
+    def serialise(self):
+        return {
+            "model_type": self.model_type,
+            "model": self.to_dict(),
+            "posterior_transform": self.transform.to_dict(),
+        }
 
     def sample(self, size: int, random_seed: int = 0) -> np.ndarray:
         """
@@ -56,7 +74,8 @@ class LikelihoodBase(ABC):
         return self.transform.backward(self.model.sample(jr.key(random_seed), (size,)))
 
     def log_prob(self, x: np.array) -> np.ndarray:
-        return self.model.log_prob(self.transform.backward(x))
+        """Compute log-probability"""
+        return np.array(self.model.log_prob(self.transform.backward(x)))
 
     def save(self, filename: str) -> None:
         """
@@ -68,12 +87,10 @@ class LikelihoodBase(ABC):
         path = Path(filename)
         if path.suffix != ".nabu":
             path = path.with_suffix(".nabu")
-        config = {"model_type": self.model_type}
-        config.update({"model_config": self.serialise()})
-        config.update({"standardisation": self.transform.serialise()})
-        config.update({"notes": self.notes, "version": self.version})
+        config = self.serialise()
+        config.update({"version": __version__})
 
         with open(str(path), "wb") as f:
-            hyperparam_str = json.dumps(config)
+            hyperparam_str = json.dumps(self.serialise())
             f.write((hyperparam_str + "\n").encode())
             eqx.tree_serialise_leaves(f, self.model)
