@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from functools import partial
+from functools import partial, wraps
 
 import equinox as eqx
 import jax
@@ -30,6 +30,7 @@ from flowjax.wrappers import Parameterize, WeightNormalization
 from jax.nn import relu, sigmoid, softmax, softplus, tanh
 from jax.nn.initializers import glorot_uniform
 from jaxtyping import PRNGKeyArray
+
 from .serialisation_utils import serialise_wrapper
 
 __all__ = [
@@ -39,6 +40,8 @@ __all__ = [
     "planar_flow",
     "triangular_spline_flow",
     "get_flow",
+    "available_flows",
+    "register_flow",
 ]
 
 
@@ -80,17 +83,6 @@ def _add_default_permute(
     else:
         perm = Permute(permutation)
     return Chain([bijection, perm]).merge_chains()
-
-
-def get_flow(flow: str):
-    """retreive flow"""
-    return {
-        "masked_autoregressive_flow": masked_autoregressive_flow,
-        "coupling_flow": coupling_flow,
-        "block_neural_autoregressive_flow": block_neural_autoregressive_flow,
-        "planar_flow": planar_flow,
-        "triangular_spline_flow": triangular_spline_flow,
-    }[flow]
 
 
 @serialise_wrapper
@@ -385,3 +377,58 @@ def triangular_spline_flow(
     layers = eqx.filter_vmap(make_layer)(keys)
     bijection = Invert(Scan(layers))
     return Transformed(base_dist, bijection)
+
+
+_flow_registry = {
+    "masked_autoregressive_flow": masked_autoregressive_flow,
+    "coupling_flow": coupling_flow,
+    "block_neural_autoregressive_flow": block_neural_autoregressive_flow,
+    "planar_flow": planar_flow,
+    "triangular_spline_flow": triangular_spline_flow,
+}
+
+
+def get_flow(flow: str) -> Callable:
+    """retreive flow"""
+    return _flow_registry[flow]
+
+
+def available_flows() -> list[str]:
+    """Retreive available flows"""
+    return list(_flow_registry.keys())
+
+
+class FlowRegistrationError(Exception):
+    """Flow Registration Error"""
+
+
+def register_flow(func: Callable) -> Callable:
+    """
+    Register a custom flow
+
+    Example:
+
+    .. code::
+
+        @nabu.register_flow
+        def my_flow(...):
+            ...
+            return pytree
+
+        assert "my_flow" in nabu.available_flows()
+
+    """
+    assert callable(func), "Invalid input, function needs to be callable."
+    if func.__name__ in _flow_registry:
+        raise FlowRegistrationError(f"{func.__name__} is already registered.")
+    registered_function = serialise_wrapper(func)
+
+    @wraps(registered_function)
+    def wrapper(*args, **kwargs):
+        assert all(
+            not callable(f) for f in args + list(kwargs.values())
+        ), "Callable functions for the inputs are currently not supported"
+        return registered_function(*args, **kwargs)
+
+    _flow_registry.update({func.__name__: wrapper})
+    return wrapper
