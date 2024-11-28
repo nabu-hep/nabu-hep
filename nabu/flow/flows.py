@@ -42,6 +42,7 @@ __all__ = [
     "get_flow",
     "available_flows",
     "register_flow",
+    "register_activation",
 ]
 
 
@@ -49,15 +50,24 @@ def __dir__():
     return __all__
 
 
+_activation_registry = {
+    "sigmoid": sigmoid,
+    "relu": relu,
+    "tanh": tanh,
+    "softmax": softmax,
+    "softplus": softplus,
+}
+
+
 def _get_activation(activation: str) -> callable:
     """retreive activation"""
-    return {
-        "sigmoid": sigmoid,
-        "relu": relu,
-        "tanh": tanh,
-        "softmax": softmax,
-        "softplus": softplus,
-    }[activation]
+    return _activation_registry[activation]
+
+
+def register_activation(name: str, function: callable) -> None:
+    """Register activation function"""
+    if callable(function) and name not in _activation_registry:
+        _activation_registry.update({name: function})
 
 
 def _affine_with_min_scale(min_scale: float = 1e-2) -> Affine:
