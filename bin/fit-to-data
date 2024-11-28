@@ -16,7 +16,10 @@ from flowjax.bijections import RationalQuadraticSpline
 from flowjax.distributions import Normal
 from scipy.stats import chi2
 
-from nabu import Histogram, chi2_analysis, fit, masked_autoregressive_flow
+from nabu.goodness_of_fit import Histogram
+from nabu.maf import masked_autoregressive_flow
+from nabu.plot import chi2_analysis
+from nabu.train import fit
 
 
 def plot_history(losses: dict[str, list], name: str) -> None:
