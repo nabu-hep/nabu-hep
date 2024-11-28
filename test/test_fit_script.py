@@ -2,7 +2,7 @@
 import numpy as np
 from scipy.stats import chi2
 
-from nabu import Histogram
+from nabu.goodness_of_fit import Histogram
 
 
 def test_fit_script_output():
