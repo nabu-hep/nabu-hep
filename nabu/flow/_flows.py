@@ -112,7 +112,9 @@ def masked_autoregressive_flow(
     Parameterises a transformer bijection with an autoregressive neural network.
     Refs: https://arxiv.org/abs/1606.04934; https://arxiv.org/abs/1705.07057v4.
 
-    based on flowjax construction with minor changes such as permutation option.
+    .. note::
+
+        Based on flowjax construction with minor changes
 
     Args:
         key (``PRNGKeyArray``): random seed
@@ -166,21 +168,28 @@ def coupling_flow(
     permutation: jnp.array = None,
     random_seed: int = 0,
 ) -> Transformed:
-    """Create a coupling flow (https://arxiv.org/abs/1605.08803).
+    """
+    Create a coupling flow (https://arxiv.org/abs/1605.08803).
+
+    .. note::
+
+        Based on flowjax construction with minor changes
 
     Args:
-        key: Jax random key.
-        base_dist: Base distribution, with ``base_dist.ndim==1``.
-        transformer: Bijection to be parameterised by conditioner. Defaults to
-            affine.
-        cond_dim: Dimension of conditioning variables. Defaults to None.
-        flow_layers: Number of coupling layers. Defaults to 8.
-        nn_width: Conditioner hidden layer size. Defaults to 50.
-        nn_depth: Conditioner depth. Defaults to 1.
-        nn_activation: Conditioner activation function. Defaults to jnn.relu.
-        invert: Whether to invert the bijection. Broadly, True will prioritise a faster
-            `inverse` methods, leading to faster `log_prob`, False will prioritise
-            faster `transform` methods, leading to faster `sample`. Defaults to True.
+        dim (``int``): feature dimensions
+        transformer (``AbstractBijection``, default ``None``):
+            Bijection to be parameterised by conditioner. Defaults to affine.
+        cond_dim (``int``, default ``None``): Dimension of conditioning variables.
+        flow_layers (``int``, default ``8``): Number of coupling layers.
+        nn_width (``int``, default ``50``): Conditioner hidden layer size.
+        activation (``str``, default ``"relu"``): Conditioner activation function.
+        permutation (``jnp.array``, default ``None``): Permutation of the features, if
+            ``None`` it will be randomly shuffled.
+        random_seed (``int``, default ``0``): random seed
+
+    Returns:
+        ``Transformed``:
+        _description_
     """
     key = jr.key(random_seed)
     activation = _get_activation(activation)
@@ -213,12 +222,17 @@ def block_neural_autoregressive_flow(
     nn_depth: int = 1,
     nn_block_dim: int = 8,
     flow_layers: int = 1,
-    activation: str = "relu",
+    activation: str = "sigmoid",
     inverter: Callable = None,
     permutation: jnp.array = None,
     random_seed: int = 0,
 ) -> Transformed:
-    """Block neural autoregressive flow (BNAF) (https://arxiv.org/abs/1904.04676).
+    """
+    Block neural autoregressive flow (BNAF) (https://arxiv.org/abs/1904.04676).
+
+    .. note::
+
+        Based on flowjax construction with minor changes
 
     Each flow layer contains a
     :class:`~flowjax.bijections.block_autoregressive_network.BlockAutoregressiveNetwork`
@@ -228,24 +242,24 @@ def block_neural_autoregressive_flow(
     controlled by the ``invert`` argument.
 
     Args:
-        key: Jax key.
-        base_dist: Base distribution, with ``base_dist.ndim==1``.
-        cond_dim: Dimension of conditional variables. Defaults to None.
-        nn_depth: Number of hidden layers within the networks. Defaults to 1.
-        nn_block_dim: Block size. Hidden layer width is dim*nn_block_dim. Defaults to 8.
-        flow_layers: Number of BNAF layers. Defaults to 1.
-        invert: Use `True` for efficient ``log_prob`` (e.g. when fitting by maximum
-            likelihood), and `False` for efficient ``sample`` and
-            ``sample_and_log_prob`` methods (e.g. for fitting variationally).
-        activation: Activation function used within block neural autoregressive
-            networks. Note this should be bijective and in some use cases should map
-            real -> real. For more information, see
-            :class:`~flowjax.bijections.block_autoregressive_network.BlockAutoregressiveNetwork`.
-            Defaults to :class:`~flowjax.bijections.tanh.LeakyTanh`.
-        inverter: Callable that implements the required numerical method to invert the
+        dim (``int``): _description_
+        cond_dim (``int``, default ``None``): Dimension of conditional variables.
+        nn_depth (``int``, default ``1``): Number of hidden layers within the networks.
+        nn_block_dim (``int``, default ``8``): Block size. Hidden layer width is ``dim*nn_block_dim``.
+        flow_layers (``int``, default ``1``): Number of BNAF layers.
+        activation (``str``, default ``"relu"``): Activation function used within block neural autoregressive
+            networks. Note this should be bijective and in some use cases should map real -> real.
+        inverter (``Callable``, default ``None``): Callable that implements the required numerical method to invert the
             ``BlockAutoregressiveNetwork`` bijection. Must have the signature
             ``inverter(bijection, y, condition=None)``. Defaults to using a bisection
             search via ``AutoregressiveBisectionInverter``.
+        permutation (``jnp.array``, default ``None``): Permutation of the features, if
+            ``None`` it will be randomly shuffled.
+        random_seed (``int``, default ``0``): random seed
+
+    Returns:
+        ``Transformed``:
+        _description_
     """
     key = jr.key(random_seed)
     base_dist = Normal(jnp.zeros(dim))

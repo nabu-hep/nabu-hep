@@ -1,11 +1,21 @@
 import inspect
 from enum import Enum, auto
 from functools import wraps
+from collections.abc import Callable
 
 from flowjax.bijections import AbstractBijection
 from jax.numpy import ndarray
 
-from nabu.likelihood.nflow_likelihood import FlowLikelihood
+from ._flow_likelihood import FlowLikelihood
+
+__all__ = ["serialise_wrapper"]
+
+
+def __dir__():
+    return __all__
+
+
+# pylint: disable=protected-access
 
 
 class ArgumentType(Enum):
@@ -24,7 +34,20 @@ class UnsupportedMethod(Exception):
     """Unsupported Method Type"""
 
 
-def serialise_method(method: callable) -> dict:
+def serialise_method(method: Callable) -> dict:
+    """
+    _summary_
+
+    Args:
+        method (``callable``): _description_
+
+    Raises:
+        ``UnsupportedMethod``: _description_
+
+    Returns:
+        ``dict``:
+        _description_
+    """
     if isinstance(method, (int, float, type(None), list, tuple)):
         return method
     identifier = method.__name__
@@ -45,7 +68,20 @@ def serialise_method(method: callable) -> dict:
     return {identifier: args_kwargs}
 
 
-def serialise_wrapper(method):
+def serialise_wrapper(method: Callable):
+    """
+    _summary_
+
+    Args:
+        method (``Callable``): _description_
+
+    Raises:
+        ``ValueError``: _description_
+
+    Returns:
+        ``_type_``:
+        _description_
+    """
     serialised_method = serialise_method(method)
     method_name = method.__name__
 
@@ -67,7 +103,7 @@ def serialise_wrapper(method):
                         ]
                 serialised_method[method_name][key] = signature
             elif key not in serialised_method[method_name]:
-                raise ValueError
+                raise UnsupportedMethod(f"invalid argument: {key}")
             elif isinstance(item, (int, str, bool, ndarray, list, tuple, float)):
                 serialised_method[method_name][key] = item
             else:

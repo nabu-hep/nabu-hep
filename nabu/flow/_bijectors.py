@@ -1,5 +1,3 @@
-from typing import Text, Any
-
 from flowjax.bijections import (
     Affine,
     Concatenate,
@@ -41,6 +39,7 @@ __all__ = [
     "Stack",
     "Tanh",
     "TriangularAffine",
+    "available_bijectors",
 ]
 
 
@@ -48,7 +47,7 @@ def __dir__():
     return __all__
 
 
-BIJECTORS = {
+_BIJECTORS = {
     "Affine": Affine,
     "Concatenate": Concatenate,
     "Coupling": Coupling,
@@ -71,4 +70,21 @@ BIJECTORS = {
 
 
 def get_bijector(bijector: str):
-    return BIJECTORS[bijector]
+    """
+    _summary_
+
+    Args:
+        bijector (``str``): _description_
+    """
+    return _BIJECTORS[bijector]
+
+
+def available_bijectors() -> list[str]:
+    """
+    _summary_
+
+    Returns:
+        ``list[str]``:
+        _description_
+    """
+    return list(_BIJECTORS.keys())
