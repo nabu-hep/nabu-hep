@@ -31,7 +31,7 @@ from jax.nn import relu, sigmoid, softmax, softplus, tanh
 from jax.nn.initializers import glorot_uniform
 from jaxtyping import PRNGKeyArray
 
-from .serialisation_utils import serialise_wrapper
+from ._serialisation_utils import serialise_wrapper
 
 __all__ = [
     "masked_autoregressive_flow",
