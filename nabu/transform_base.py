@@ -6,6 +6,12 @@ from .dalitz_utils import dalitz_to_square, square_to_dalitz
 
 Array = Any
 
+__all__ = ["PosteriorTransform"]
+
+
+def __dir__():
+    return __all__
+
 
 class PosteriorTransform:
     """Base class to handle transformations"""
@@ -83,10 +89,12 @@ class PosteriorTransform:
 
     @classmethod
     def from_mean_std(cls, mean: list[float], std: list[float]):
+        """Generate transform from mean and standard deviation"""
         return cls("mean_std", mean=mean, std=std)
 
     @classmethod
     def from_dalitz(cls, md: float, ma: float, mb: float, mc: float):
+        """Generate transform from dalitz conversion"""
         return cls("dalitz", md=md, ma=ma, mb=mb, mc=mc)
 
     def forward(self, x: Array) -> Array:
