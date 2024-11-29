@@ -1,4 +1,7 @@
-"""Masked Autoregressive Flow"""
+"""
+This file is outdated and replaced with flow/flows.py
+keeping here until fit-to-data is modified
+"""
 from collections.abc import Callable
 
 import equinox as eqx
