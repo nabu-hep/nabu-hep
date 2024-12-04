@@ -1,9 +1,11 @@
 import json
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from importlib.metadata import version
 from pathlib import Path
 
 import equinox as eqx
+import jax.numpy as jnp
 import jax.random as jr
 import numpy as np
 from jax.tree_util import tree_structure
@@ -63,26 +65,16 @@ class Likelihood(ABC):
         self._posterior_transform = ptransform
 
     @abstractmethod
-    def to_dict(self) -> dict:
-        """convert model to dictionary"""
-
-    @abstractmethod
-    def inverse(self):
+    def inverse(self) -> Callable:
         """return inverse of the model"""
 
-    def serialise(self) -> dict:
-        """
-        _summary_
+    def compute_inverse(self, x: np.ndarray) -> np.ndarray:
+        """Compute inverse likelihood for a given dataset"""
+        return np.array(self.inverse()(jnp.array(self.transform.backward(x))))
 
-        Returns:
-            ``dict``:
-            _description_
-        """
-        return {
-            "model_type": self.model_type,
-            "model": self.to_dict(),
-            "posterior_transform": self.transform.to_dict(),
-        }
+    @abstractmethod
+    def fit_to_data(self, *args, **kwargs) -> dict[str, list[float]]:
+        """Fit likelihood to given dataset"""
 
     def sample(self, size: int, random_seed: int = 0) -> np.ndarray:
         """
@@ -103,6 +95,48 @@ class Likelihood(ABC):
     def log_prob(self, x: np.array) -> np.ndarray:
         """Compute log-probability"""
         return np.array(self.model.log_prob(self.transform.backward(x)))
+
+    def goodness_of_fit(
+        self,
+        test_dataset: np.ndarray,
+        prob_per_bin: float = 0.1,
+    ) -> Histogram:
+        """
+        _summary_
+
+        Args:
+            test_dataset (``np.ndarray``): _description_
+            prob_per_bin (``float``, default ``0.1``): _description_
+
+        Returns:
+            ``Histogram``:
+            _description_
+        """
+        dim = test_dataset.shape[-1]
+        deviations = self.compute_inverse(test_dataset)
+        bins = chi2.ppf(
+            np.linspace(0.0, 1.0, int(np.ceil(1.0 / prob_per_bin)) + 1), df=dim
+        )
+        return Histogram(dim=dim, bins=bins, vals=np.sum(deviations**2, axis=1))
+
+    @abstractmethod
+    def to_dict(self) -> dict:
+        """convert model to dictionary"""
+
+    def serialise(self) -> dict:
+        """
+        _summary_
+
+        Returns:
+            ``dict``:
+            _description_
+        """
+        assert self.model_type != "base", "Invalid model type"
+        return {
+            "model_type": self.model_type,
+            "model": self.to_dict(),
+            "posterior_transform": self.transform.to_dict(),
+        }
 
     def save(self, filename: str) -> None:
         """
@@ -152,6 +186,9 @@ class Likelihood(ABC):
                 transformer, transformer_kwargs = list(
                     *flow_kwargs["transformer"].items()
                 )
+                for key in transformer_kwargs:
+                    if isinstance(transformer_kwargs[key], list):
+                        transformer_kwargs[key] = tuple(transformer_kwargs[key])
                 flow_kwargs["transformer"] = get_bijector(transformer)(
                     **transformer_kwargs
                 )
