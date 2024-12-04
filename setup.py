@@ -6,7 +6,7 @@ with open("README.md", encoding="utf-8") as f:
 with open("nabu/_version.py", encoding="UTF-8") as f:
     version = f.readlines()[-1].split()[-1].strip("\"'")
 
-requirements = ["flowjax", "scipy>=1.10.0", "matplotlib"]
+requirements = ["flowjax", "scipy>=1.10.0"]
 
 setup(
     name="nabu",
