@@ -6,6 +6,10 @@ from pathlib import Path
 import equinox as eqx
 import jax.random as jr
 import numpy as np
+from jax.tree_util import tree_structure
+from scipy.stats import chi2
+
+from .goodness_of_fit import Histogram
 
 __all__ = ["Likelihood"]
 
@@ -18,6 +22,8 @@ def __dir__():
 
 
 class Likelihood(ABC):
+    """Base Likelihood Definition"""
+
     model_type: str = "base"
     """Model type"""
 
@@ -39,6 +45,9 @@ class Likelihood(ABC):
     @model.setter
     def model(self, model):
         assert hasattr(model, "log_prob") and hasattr(model, "sample"), "Invalid model"
+        assert tree_structure(self._model) == tree_structure(
+            model
+        ), "Likelihood definition does not match"
         self._model = model
 
     @property
