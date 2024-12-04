@@ -1,5 +1,6 @@
 import warnings
 from collections.abc import Callable, Sequence
+from typing import Union
 
 import numpy as np
 from scipy.stats import chi2, kstest, norm
@@ -11,7 +12,7 @@ def __dir__():
     return __all__
 
 
-def sqrt_method(values, _):
+def sqrt_method(values, *args, **kwargs):
     return values - np.sqrt(values), values + np.sqrt(values)
 
 
