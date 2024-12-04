@@ -33,6 +33,6 @@ jobs:
         python -m pip install -e .
     - name: Test with pytest
       run: |
-        fit-to-data -test -dp test/data-2020-025-transformed.npz -op test/results
-        # 1-CDF(residuals) = 1.97%, KS p-val: 0.64%
+        fit-to-data -test -dp test/data-2020-025-transformed.npz -op test/results -e 20
+        # 1-CDF(residuals) = 0.00%, KS p-val: 19.52%
         pytest test/*py
