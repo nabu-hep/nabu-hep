@@ -21,6 +21,8 @@ except NotImplementedError:
     summary_plot = None
     print("  -> Warning: Plotting is not available")
 
+# pylint: disable=no-member
+
 
 def plot_history(losses: dict[str, list], name: str) -> None:
     fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2, figsize=(9, 4))
