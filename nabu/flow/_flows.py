@@ -31,6 +31,7 @@ from jax.nn import relu, sigmoid, softmax, softplus, tanh
 from jax.nn.initializers import glorot_uniform
 from jaxtyping import PRNGKeyArray
 
+from ._flow_likelihood import FlowLikelihood
 from ._serialisation_utils import serialise_wrapper
 
 __all__ = [
@@ -105,7 +106,7 @@ def masked_autoregressive_flow(
     nn_depth: int = 1,
     activation: str = "relu",
     invert: bool = True,
-    permutation: jnp.array = None,
+    permutation: list[int] = None,
     random_seed: int = 0,
 ) -> Transformed:
     """
@@ -124,7 +125,7 @@ def masked_autoregressive_flow(
         flow_layers (``int``, default ``8``): _description_
         nn_width (``int``, default ``50``): _description_
         nn_depth (``int``, default ``1``): _description_
-        nn_activation (``Callable``, default ``jax.nn.relu``): _description_
+        nn_activation (``str``, default ``jax.nn.relu``): _description_
         invert (``bool``, default ``True``): _description_
         return_bijection (``bool``, default ``False``): _description_
         permutation (``jnp.array``, default ``None``): _description_
@@ -137,6 +138,8 @@ def masked_autoregressive_flow(
     activation = _get_activation(activation)
     transformer = transformer or _affine_with_min_scale()
     base_dist = Normal(jnp.zeros(dim))
+    if permutation is not None:
+        permutation = jnp.array(permutation)
 
     def make_layer(key):  # masked autoregressive layer + permutation
         bij_key, perm_key = jax.random.split(key)
@@ -412,7 +415,7 @@ _flow_registry = {
 }
 
 
-def get_flow(flow: str) -> Callable:
+def get_flow(flow: str) -> FlowLikelihood:
     """retreive flow"""
     return _flow_registry[flow]
 
