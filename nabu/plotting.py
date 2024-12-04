@@ -1,53 +1,73 @@
+"""Fill summary plot"""
 from collections.abc import Sequence
-import matplotlib.pyplot as plt
+
+try:
+    import matplotlib.pyplot as plt
+
+    plt.rcParams.update({"text.usetex": True, "font.family": "sans-serif"})
+except ImportError as err:
+    raise NotImplementedError("Summary plot requires matplotlib") from err
 import numpy as np
 from scipy.stats import chi2
 
 from .goodness_of_fit import Histogram
+from .likelihood import Likelihood
+
+# pylint: disable=too-many-arguments, too-many-locals
 
 
-def chi2_analysis(
-    deviations: np.ndarray,
-    plot_name: str = None,
-    event_prob_per_bin: float = None,
-    xerr: bool = False,
+def summary_plot(
+    likelihood: Likelihood,
+    test_data: np.ndarray,
+    weights: Sequence[float] = None,
+    bins: Sequence[float] = None,
+    hist_max_value: float = 20.0,
+    prob_per_bin: float = None,
+    add_xerr: bool = False,
     confidence_level: Sequence[float] = (0.68, 0.95, 0.99),
-    **hist_kwargs,
-) -> None:
+) -> tuple:
     """
-    _summary_
+    Prepare summary plot
 
     Args:
-        deviations (``np.ndarray``): deviations from normal distribution with mean 0 and sigma 1
-        plot_name (``str``, default ``None``): name of the plot
-        event_prob_per_bin (``float``, default ``None``): event probability at each bin. This arg
-            will resize the bins to ensure each bin has the same event probability.
-        confidence_level (``Sequence[float]``, default ``(0.68, 0.95, 0.99)``): vertical lines to be
-            added to the density plot showing the location of various confidence.
-        hist_kwargs:
-            bins (``int`` or ``np.ndarray``): if ``event_prob_per_bin`` is not given, number of bins
-                are needed. Default 100.
-            max_val (``int``, default ``20``): if ``bins`` are integer, max value is needed
-            weights (``np.ndarray``, default ``None``): event weights. default is 1 per event.
+        likelihood (``Likelihood``): _description_
+        test_data (``np.ndarray``): _description_
+        weights (``Sequence[float]``, default ``None``): _description_
+        bins (``Sequence[float]``, default ``None``): _description_
+        hist_max_value (``float``, default ``20.0``): _description_
+        prob_per_bin (``float``, default ``None``): _description_
+        add_xerr (``bool``, default ``False``): _description_
+        confidence_level (``Sequence[float]``, default ``(0.68, 0.95, 0.99)``): _description_
+
+    Returns:
+        Matplotlib figure and two axes
     """
-    if event_prob_per_bin is not None:
+    assert not all(
+        x is None for x in [bins, prob_per_bin]
+    ), "Both `prob_per_bin` and `bins` argument can not be `None`."
+
+    # Developer option:
+    if likelihood == "__dev__":
+        deviations = test_data
+    else:
+        deviations = likelihood.compute_inverse(test_data)
+
+    if prob_per_bin is not None:
         bins = np.hstack(
             [
-                chi2.ppf(np.arange(0.0, 1, event_prob_per_bin), df=deviations.shape[1]),
-                [hist_kwargs.get("max_val", 20.0)],
+                chi2.ppf(np.arange(0.0, 1, prob_per_bin), df=deviations.shape[1]),
+                [hist_max_value],
             ]
         )
-    else:
-        bins = hist_kwargs.get("bins", 100)
 
     chi2_test = np.sum(deviations**2, axis=1)
 
     hist = Histogram(
         dim=deviations.shape[1],
         bins=bins,
-        max_val=hist_kwargs.get("max_val", 20.0),
+        max_val=hist_max_value,
         vals=chi2_test,
-        weights=hist_kwargs.get("weights", None),
+        weights=weights,
     )
 
     hist_pval_test = Histogram(
@@ -70,7 +90,7 @@ def chi2_analysis(
     )
 
     errors = {"yerr": hist.yerr_density}
-    if len(np.unique(hist.bin_width)) != 1 and xerr:
+    if len(np.unique(hist.bin_width)) != 1 and add_xerr:
         errors.update({"xerr": hist.xerr})
 
     ax0.errorbar(
@@ -93,21 +113,22 @@ def chi2_analysis(
     ax0.plot(
         x, chi2p, color="tab:blue", label=r"$\chi^2({\rm DoF}= " + f"{hist.dim}" + ")$"
     )
-    ax0.legend(fontsize=12.5)
+    ax0.legend(fontsize=15)
     ymin, ymax = ax0.get_ylim()
     ymin = chi2.pdf(hist.max_val, df=hist.dim)
     ax0.set_ylim([ymin, ymax])
-    ax0.set_xlim([-0.5, hist_kwargs.get("max_val", 20.0) + 0.5])
+    ax0.set_xlim([-0.5, hist_max_value + 0.5])
 
     ax0.text(
         0.0,
         ymax * 1.15,
-        r"${\rm 1-CDF(Residuals) = "
+        r"$p(\chi^2) = "
         + rf"{hist_pval_test.residuals_pvalue*100.:.1f}\%,\ "
-        + rf" KST\ p-value = {hist_pval_test.kstest_pval*100:.1f}\%"
-        + "}$",
+        + r"p({\rm KS}) = "
+        + rf"{hist_pval_test.kstest_pval*100:.1f}\%"
+        + "$",
         color="darkred",
-        fontsize=12,
+        fontsize=20,
     )
 
     for cl in confidence_level:
@@ -126,20 +147,17 @@ def chi2_analysis(
             ha="right",
             va="bottom",
             rotation=90,
-            fontsize=15,
+            fontsize=20,
             color="darkred",
         )
         ax1.axvline(p, color="tab:blue", linestyle="--", zorder=0, lw=1)
 
     color = np.array(["gray"] * hist.nbins, dtype=object)
     pull = hist.pull
-    color[(abs(pull) > 1.0) & (abs(pull) <= 3.0)] = "gold"
+    color[(abs(pull) > 1.0) & (abs(pull) <= 2.0)] = "gold"
+    color[(abs(pull) > 2.0) & (abs(pull) <= 3.0)] = "orangered"
     color[abs(pull) > 3.0] = "firebrick"
     ax1.bar(hist.bin_centers, hist.pull, width=hist.bin_width, color=color.tolist())
     ax1.set_ylim([-3.1, 3.1])
 
-    if plot_name is not None:
-        plt.savefig(plot_name)
-    else:
-        plt.show()
-    plt.close("all")
+    return fig, (ax0, ax1)
