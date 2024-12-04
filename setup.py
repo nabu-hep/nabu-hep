@@ -27,7 +27,7 @@ setup(
     author_email=("jack.araz@stonybrook.edu"),
     license="MIT",
     packages=["nabu"],
-    scripts=["bin/fit-to-data"],
+    scripts=["bin/nabu-fit-to-data"],
     install_requires=requirements,
     python_requires=">=3.10",
     classifiers=[
