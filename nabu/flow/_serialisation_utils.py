@@ -112,7 +112,6 @@ class BijectorWrapper:
                     assert item != ArgumentType.REQUIRED, f"Argument `{key}` is missing."
 
                 serialised_bij[bij_name][key] = item
-                print(key, serialised_bij[bij_name][key])
         return serialised_bij
 
     def __call__(self, *args, **kwargs):
@@ -160,7 +159,6 @@ def serialise_wrapper(method: Callable):
 
             if isinstance(item, BijectorWrapper):
                 serialised_method[method_name][key] = item.to_dict()
-                print(key, item.to_dict())
                 item = item.execute()
             elif key not in serialised_method[method_name]:
                 raise UnsupportedMethod(f"invalid argument: {key}")
