@@ -3,7 +3,6 @@ name: Tests
 on:
   pull_request:
     branches: ["main", "releases/**"]
-    types: [review_requested, opened]
   push:
     branches: ["main", "releases/**", "testing"]
   workflow_dispatch:
