@@ -18,6 +18,8 @@ from flowjax.bijections import (
     Tanh,
     TriangularAffine,
 )
+from ._serialisation_utils import BijectorWrapper
+
 
 __all__ = [
     "get_bijector",
@@ -46,6 +48,25 @@ __all__ = [
 def __dir__():
     return __all__
 
+
+Affine = BijectorWrapper(Affine)
+Concatenate = BijectorWrapper(Concatenate)
+Coupling = BijectorWrapper(Coupling)
+EmbedCondition = BijectorWrapper(EmbedCondition)
+Exp = BijectorWrapper(Exp)
+LeakyTanh = BijectorWrapper(LeakyTanh)
+Loc = BijectorWrapper(Loc)
+Planar = BijectorWrapper(Planar)
+Power = BijectorWrapper(Power)
+RationalQuadraticSpline = BijectorWrapper(RationalQuadraticSpline)
+Reshape = BijectorWrapper(Reshape)
+Scale = BijectorWrapper(Scale)
+Scan = BijectorWrapper(Scan)
+Sigmoid = BijectorWrapper(Sigmoid)
+SoftPlus = BijectorWrapper(SoftPlus)
+Stack = BijectorWrapper(Stack)
+Tanh = BijectorWrapper(Tanh)
+TriangularAffine = BijectorWrapper(TriangularAffine)
 
 _BIJECTORS = {
     "Affine": Affine,
