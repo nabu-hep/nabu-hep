@@ -1,6 +1,5 @@
 import warnings
 from collections.abc import Callable, Sequence
-from typing import Union
 
 import numpy as np
 from scipy.stats import chi2, kstest, norm
