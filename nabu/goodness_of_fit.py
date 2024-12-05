@@ -102,7 +102,7 @@ class Histogram:
     def __init__(
         self,
         dim: int,
-        bins: int | np.ndarray,
+        bins: int,
         vals: np.ndarray,
         max_val: float = None,
         weights: np.ndarray = None,
@@ -170,7 +170,8 @@ class Histogram:
         )  # probability of getting events in each bin
         expected = bin_prob * self.values.sum()  # number of expected events in each bin
         # expected - observed / sqrt(var)
-        return (expected - self.values) / np.sqrt(self.variances)
+        with warnings.catch_warnings(record=False):
+            return (expected - self.values) / np.sqrt(self.variances)
 
     @property
     def yerr(self) -> tuple[np.ndarray, np.ndarray]:
@@ -185,7 +186,8 @@ class Histogram:
     @property
     def yerr_density(self) -> tuple[np.ndarray, np.ndarray]:
         """Compute y-error for density distribution"""
-        return self.density * self.yerr / self.values
+        with warnings.catch_warnings(record=False):
+            return self.density * self.yerr / self.values
 
     @property
     def xerr(self) -> tuple[np.ndarray, np.ndarray]:
