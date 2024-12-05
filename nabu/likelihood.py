@@ -197,9 +197,12 @@ class Likelihood(ABC):
             likelihood = get_flow(flow_id)(**flow_kwargs)
             likelihood.model = eqx.tree_deserialise_leaves(f, likelihood.model)
 
-            ptrans_def, kwargs = list(
-                *likelihood_definition["posterior_transform"].items()
-            )
-            likelihood.transform = PosteriorTransform(ptrans_def, **kwargs)
+            if likelihood_definition["posterior_transform"] != {}:
+                ptrans_def, kwargs = list(
+                    *likelihood_definition["posterior_transform"].items()
+                )
+                likelihood.transform = PosteriorTransform(ptrans_def, **kwargs)
+            else:
+                likelihood.transform = PosteriorTransform()
 
         return likelihood
