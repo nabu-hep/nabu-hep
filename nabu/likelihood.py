@@ -157,7 +157,7 @@ class Likelihood(ABC):
             eqx.tree_serialise_leaves(f, self.model)
 
     @staticmethod
-    def load(filename: str, random_seed: int):
+    def load(filename: str, random_seed: int = np.random.randint(0, high=999999999999)):
         """
         Load likelihood from file
 
