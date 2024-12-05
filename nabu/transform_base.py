@@ -17,7 +17,9 @@ class PosteriorTransform:
     """Base class to handle transformations"""
 
     def __init__(
-        self, name: Literal["mean_std", "dalitz", "user-defined"] = None, **kwargs
+        self,
+        name: Literal["mean_std", "dalitz", "min-max", "user-defined"] = None,
+        **kwargs,
     ):
         """
         Definition of posterior transformation
@@ -65,6 +67,19 @@ class PosteriorTransform:
             def backward(x):
                 return square_to_dalitz(x, md, ma, mb, mc)
 
+        elif name == "min-max":
+            minimum, scale = jnp.array(kwargs["minimum"]), jnp.array(kwargs["scale"])
+
+            self._metadata = {
+                "min-max": {"minimum": minimum.tolist(), "scale": scale.tolist()}
+            }
+
+            def forward(x):
+                return (x - minimum) / scale
+
+            def backward(x):
+                return x * scale + minimum
+
         elif name is None:
             forward = lambda x: x
             backward = lambda x: x
@@ -91,6 +106,11 @@ class PosteriorTransform:
     def from_mean_std(cls, mean: list[float], std: list[float]):
         """Generate transform from mean and standard deviation"""
         return cls("mean_std", mean=mean, std=std)
+
+    @classmethod
+    def from_min_max(cls, minimum: list[float], scale: list[float]):
+        """Generate transform from min-max"""
+        return cls("min-max", minimum=minimum, scale=scale)
 
     @classmethod
     def from_dalitz(cls, md: float, ma: float, mb: float, mc: float):
