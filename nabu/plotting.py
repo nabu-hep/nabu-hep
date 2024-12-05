@@ -4,7 +4,7 @@ from collections.abc import Sequence
 try:
     import matplotlib.pyplot as plt
 
-    plt.rcParams.update({"text.usetex": True, "font.family": "sans-serif"})
+    # plt.rcParams.update({"text.usetex": True, "font.family": "sans-serif"})
 except ImportError as err:
     raise NotImplementedError("Summary plot requires matplotlib") from err
 import numpy as np
