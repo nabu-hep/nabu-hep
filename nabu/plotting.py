@@ -102,7 +102,7 @@ def summary_plot(
         color="k",
         elinewidth=1,
         capsize=4,
-        label=r"${\rm Transformed\ samples}$",
+        label=r"${\rm Transformed}$" + "\n" + r"${\rm samples}$",
         zorder=100,
     )
     ax0.set_yscale("log")
@@ -113,7 +113,7 @@ def summary_plot(
     ax0.plot(
         x, chi2p, color="tab:blue", label=r"$\chi^2({\rm DoF}= " + f"{hist.dim}" + ")$"
     )
-    ax0.legend(fontsize=15)
+    ax0.legend(fontsize=16)
     ymin, ymax = ax0.get_ylim()
     ymin = chi2.pdf(hist.max_val, df=hist.dim)
     ax0.set_ylim([ymin, ymax])
@@ -121,7 +121,7 @@ def summary_plot(
 
     ax0.text(
         0.0,
-        ymax * 1.15,
+        ymax * 1.2,
         r"$p(\chi^2) = "
         + rf"{hist_pval_test.residuals_pvalue*100.:.1f}\%,\ "
         + r"p({\rm KS}) = "
