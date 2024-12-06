@@ -38,6 +38,11 @@ def summary_plot(
     with :math:`[0,1]\sigma` shown in gray, :math:`(1,2]\sigma` in gold,
     :math:`(2,3]\sigma` in orangered, and :math:`>3\sigma` in dark red.
 
+    The title of the plot has been organised as follows: :math:`p(\chi^2)` shows the
+    p-value percentage of the agreement with the :math:`\chi^2` distribution where
+    DoF are given as the number of bins. :math:`p(KS)` is the p-value of the
+    Kolmogorov-Smirnov test with respect to the :math:`\chi^2` distribution.
+
     Args:
         likelihood (``Likelihood``): likelihood object
         test_data (``np.ndarray``): test data
