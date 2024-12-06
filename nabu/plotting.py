@@ -26,18 +26,30 @@ def summary_plot(
     add_xerr: bool = False,
     confidence_level: Sequence[float] = (0.68, 0.95, 0.99),
 ) -> tuple:
-    """
-    Prepare summary plot
+    r"""
+    Generates two plots by applying the inverse transformation of the
+    likelihood object to the test data. The first plot is mapped onto
+    the :math:`\chi^2` distribution corresponding to the dataset's
+    degrees of freedom (DoF). The continuous curve represents the
+    expected :math:`\chi^2` distribution, while black dots indicate the
+    transformed distribution for each bin, including statistical uncertainties.
+    The second plot highlights deviations for each bin relative to the expected
+    :math:`\chi^2` distribution. Deviations are categorized by significance levels,
+    with :math:`[0,1]\sigma` shown in gray, :math:`(1,2]\sigma` in gold,
+    :math:`(2,3]\sigma` in orangered, and :math:`>3\sigma` in dark red.
 
     Args:
-        likelihood (``Likelihood``): _description_
-        test_data (``np.ndarray``): _description_
-        weights (``Sequence[float]``, default ``None``): _description_
-        bins (``Sequence[float]``, default ``None``): _description_
-        hist_max_value (``float``, default ``20.0``): _description_
-        prob_per_bin (``float``, default ``None``): _description_
-        add_xerr (``bool``, default ``False``): _description_
-        confidence_level (``Sequence[float]``, default ``(0.68, 0.95, 0.99)``): _description_
+        likelihood (``Likelihood``): likelihood object
+        test_data (``np.ndarray``): test data
+        weights (``Sequence[float]``, default ``None``): weights for data, if `None` it
+            they will be treated equal weight.
+        bins (``Sequence[float]``, default ``None``): bin edges for the historgram. If `None`
+            `prob_per_bin` option will be used.
+        hist_max_value (``float``, default ``20.0``): Max value for the histogram.
+        prob_per_bin (``float``, default ``None``): Probability of event occurance per bin.
+        add_xerr (``bool``, default ``False``): Add errors on x-axis.
+        confidence_level (``Sequence[float]``, default ``(0.68, 0.95, 0.99)``): confidence level
+            lines to be added on the plot.
 
     Returns:
         Matplotlib figure and two axes
