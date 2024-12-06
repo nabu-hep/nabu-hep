@@ -88,56 +88,59 @@ def fit(
 
     loop = tqdm(range(max_epochs), disable=not show_progress)
 
-    for epoch in loop:
-        # Shuffle data
-        key, *subkeys = jr.split(key, 3)
-        train_data = [jr.permutation(subkeys[0], a) for a in train_data]
-        val_data = [jr.permutation(subkeys[1], a) for a in val_data]
+    try:
+        for epoch in loop:
+            # Shuffle data
+            key, *subkeys = jr.split(key, 3)
+            train_data = [jr.permutation(subkeys[0], a) for a in train_data]
+            val_data = [jr.permutation(subkeys[1], a) for a in val_data]
 
-        # Train epoch
-        batch_losses = []
-        for batch in zip(*get_batches(train_data, batch_size)):
-            key, subkey = jr.split(key)
-            params, opt_state, loss_i = step(
-                params,
-                static,
-                *batch,
-                optimizer=optimizer,
-                opt_state=opt_state,
-                loss_fn=loss_fn,
-                key=subkey,
-            )
-            batch_losses.append(loss_i)
-        losses["train"].append((sum(batch_losses) / len(batch_losses)).item())
+            # Train epoch
+            batch_losses = []
+            for batch in zip(*get_batches(train_data, batch_size)):
+                key, subkey = jr.split(key)
+                params, opt_state, loss_i = step(
+                    params,
+                    static,
+                    *batch,
+                    optimizer=optimizer,
+                    opt_state=opt_state,
+                    loss_fn=loss_fn,
+                    key=subkey,
+                )
+                batch_losses.append(loss_i)
+            losses["train"].append((sum(batch_losses) / len(batch_losses)).item())
 
-        # Val epoch
-        batch_losses = []
-        for batch in zip(*get_batches(val_data, batch_size)):
-            key, subkey = jr.split(key)
-            loss_i = loss_fn(params, static, *batch, key=subkey)
-            batch_losses.append(loss_i)
-        losses["val"].append((sum(batch_losses) / len(batch_losses)).item())
+            # Val epoch
+            batch_losses = []
+            for batch in zip(*get_batches(val_data, batch_size)):
+                key, subkey = jr.split(key)
+                loss_i = loss_fn(params, static, *batch, key=subkey)
+                batch_losses.append(loss_i)
+            losses["val"].append((sum(batch_losses) / len(batch_losses)).item())
 
-        if lr_scheduler is not None:
-            opt_state.hyperparams["learning_rate"] = lr_scheduler(epoch + 1)
-            losses["lr"].append(float(opt_state.hyperparams["learning_rate"]))
+            if lr_scheduler is not None:
+                opt_state.hyperparams["learning_rate"] = lr_scheduler(epoch + 1)
+                losses["lr"].append(float(opt_state.hyperparams["learning_rate"]))
 
-        loop.set_postfix({k: v[-1] for k, v in losses.items()})
-        if losses["val"][-1] == min(losses["val"]):
-            best_params = params
+            loop.set_postfix({k: v[-1] for k, v in losses.items()})
+            if losses["val"][-1] == min(losses["val"]):
+                best_params = params
 
-        elif (
-            count_fruitless(losses["val"]) > max_patience
-            and (epoch + 1) % check_every == 0
-            and epoch > check_every
-        ):
-            loop.set_postfix_str(f"{loop.postfix} (Max patience reached)")
-            break
-        if jnp.any(jnp.isnan(jnp.array(losses["val"] + losses["train"]))) or jnp.any(
-            jnp.isinf(jnp.array(losses["val"] + losses["train"]))
-        ):
-            loop.set_postfix_str(f"{loop.postfix} (inf or nan loss)")
-            break
+            elif (
+                count_fruitless(losses["val"]) > max_patience
+                and (epoch + 1) % check_every == 0
+                and epoch > check_every
+            ):
+                loop.set_postfix_str(f"{loop.postfix} (Max patience reached)")
+                break
+            if jnp.any(jnp.isnan(jnp.array(losses["val"] + losses["train"]))) or jnp.any(
+                jnp.isinf(jnp.array(losses["val"] + losses["train"]))
+            ):
+                loop.set_postfix_str(f"{loop.postfix} (inf or nan loss)")
+                break
+    except KeyboardInterrupt:
+        print("Training interrupted by the user")
 
     params = best_params if return_best else params
     dist = eqx.combine(params, static)
