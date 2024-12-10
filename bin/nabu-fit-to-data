@@ -12,30 +12,31 @@ import yaml
 from scipy.stats import chi2
 
 from nabu import Likelihood
-from nabu.flow import RationalQuadraticSpline, get_flow
+from nabu.flow import RationalQuadraticSpline, available_activations, get_flow
 
 try:
     import matplotlib.pyplot as plt
 
     from nabu.plotting import summary_plot
+
+    def plot_history(losses: dict[str, list], name: str) -> None:
+        fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2, figsize=(9, 4))
+        ax0.plot(losses["train"], label="train")
+        ax0.plot(losses["val"], label="val")
+        ax0.legend()
+        if np.all(np.greater_equal(losses["train"], 0.0)) and np.all(
+            np.greater_equal(losses["train"], 0.0)
+        ):
+            ax0.set_yscale("log")
+        ax1.plot(losses["lr"])
+        ax1.set_yscale("log")
+        plt.savefig(name)
+        plt.close("all")
+
 except NotImplementedError:
     summary_plot = None
+    plot_history = None
     print("  -> Warning: Plotting is not available")
-
-
-def plot_history(losses: dict[str, list], name: str) -> None:
-    fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2, figsize=(9, 4))
-    ax0.plot(losses["train"], label="train")
-    ax0.plot(losses["val"], label="val")
-    ax0.legend()
-    if np.all(np.greater_equal(losses["train"], 0.0)) and np.all(
-        np.greater_equal(losses["train"], 0.0)
-    ):
-        ax0.set_yscale("log")
-    ax1.plot(losses["lr"])
-    ax1.set_yscale("log")
-    plt.savefig(name)
-    plt.close("all")
 
 
 def main(args):
@@ -65,7 +66,7 @@ def main(args):
             flow_layers=args.FLOWLAYERS,
             nn_width=args.NNWIDTH,
             nn_depth=args.NNDEPTH,
-            activation="relu",
+            activation=args.ACTIVATION,
             permutation=list(reversed(range(dim))),
             random_seed=42 if args.TEST else np.random.randint(0, high=999999999999),
         )
@@ -147,6 +148,15 @@ if __name__ == "__main__":
         default=2,
         help="Number of flow layers",
         dest="FLOWLAYERS",
+    )
+    parameters.add_argument(
+        "--activation",
+        "-a",
+        type=str,
+        default="relu",
+        choices=available_activations(),
+        help="Activation function for MLP.",
+        dest="ACTIVATION",
     )
     parameters.add_argument(
         "-lr", type=float, default=1e-3, help="learning rate", dest="LR"

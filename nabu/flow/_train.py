@@ -86,7 +86,12 @@ def fit(
         "lr": [float(opt_state.hyperparams["learning_rate"])],
     }
 
-    loop = tqdm(range(max_epochs), disable=not show_progress)
+    loop = tqdm(
+        range(max_epochs),
+        disable=not show_progress,
+        unit="epoch",
+        bar_format="{l_bar}{bar:20}{r_bar}{bar:-20b}",
+    )
 
     try:
         for epoch in loop:
