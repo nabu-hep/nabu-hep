@@ -44,6 +44,7 @@ __all__ = [
     "available_flows",
     "register_flow",
     "register_activation",
+    "available_activations",
 ]
 
 
@@ -58,6 +59,11 @@ _activation_registry = {
     "softmax": softmax,
     "softplus": softplus,
 }
+
+
+def available_activations() -> list[str]:
+    """retreive available activation functions"""
+    return list(_activation_registry.keys())
 
 
 def _get_activation(activation: str) -> callable:
