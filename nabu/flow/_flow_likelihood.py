@@ -73,6 +73,7 @@ class FlowLikelihood(Likelihood):
         validation_probability: float = 0.1,
         verbose: bool = True,
         random_seed: int = np.random.randint(0, high=999999999999),
+        plot_progress: str = None,
     ) -> dict[str, list[float]]:
         """
         Fit likelihood to the data
@@ -90,6 +91,7 @@ class FlowLikelihood(Likelihood):
             validation_probability (``float``, default ``0.1``): _description_
             verbose (``bool``, default ``True``): _description_
             random_seed (``int``): _description_
+            plot_progress (``str``, default ``None``): _description_
 
         Returns:
             ``dict[str, list[float]]``:
@@ -111,6 +113,7 @@ class FlowLikelihood(Likelihood):
             lr_scheduler=lr_scheduler,
             show_progress=verbose,
             check_every=check_every,
+            plot_progress=plot_progress,
         )
         self.model = flow
         return history
