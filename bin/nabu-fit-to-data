@@ -260,7 +260,10 @@ if __name__ == "__main__":
         "-dp",
         type=str,
         help="NumPy file includes standardised dataset. "
-        + "File should include 'X_train` and `X_test` keyword arguments.",
+        "File should include 'X_train` and `X_test` keyword arguments."
+        "Use the following to save your dataset `np.savez_compressed('my_dataset.npz', X_train=X_train, X_test=X_test)`. "
+        "Notice that `X_train` corresponds to the samples that will be used for training and "
+        "`X_test` corresponds to the data that will be used for testing.",
         dest="DATAPATH",
     )
     dataset.add_argument(
