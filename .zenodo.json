@@ -1,0 +1,42 @@
+{
+    "description": "Communicating Likelihoods with Normalising Flows",
+    "license": "MIT",
+    "title": "nabu-hep/nabu-hep: v0.0.1",
+    "version": "v0.0.1",
+    "upload_type": "software",
+    "creators": [
+        {
+            "affiliation": "Stony Brook University",
+            "name": "Araz, Jack Y.",
+            "orcid": "0000-0001-8721-8042"
+        }
+    ],
+    "access_right": "open",
+    "keywords": [
+        "physics",
+        "normalising-flow",
+        "statistics",
+        "fitting",
+        "scipy",
+        "inference",
+        "likelihoods"
+    ],
+    "related_identifiers": [
+        {
+            "scheme": "doi",
+            "identifier": "<DOI>",
+            "relation": "isDocumentedBy",
+            "resource_type": "publication-article"
+        },
+        {
+            "scheme": "url",
+            "identifier": "https://github.com/nabu-hep/nabu-hep/tree/v0.0.1",
+            "relation": "isSupplementTo"
+        },
+        {
+            "scheme": "url",
+            "identifier": "https://nabu-hep.readthedocs.io/",
+            "relation": "isDocumentedBy"
+        }
+    ]
+}
