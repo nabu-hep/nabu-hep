@@ -45,13 +45,14 @@ def main(args):
     dim = X_train.shape[1]
     if 0.0 < args.DATAFRAC < 1.0:
         X_train = X_train[: int(X_train.shape[0] * args.DATAFRAC)]
+        print(f"Training for {X_train.shape[0]} samples")
 
     transformer = {
         "affine": None,
         "rqs": RationalQuadraticSpline(knots=args.KNOTS, interval=args.INTERVAL),
     }[args.TRANS]
 
-    best_pval = 0
+    best_pval = -1.0
     while True:
         # check if there are any completed scans
         # important in case of a parallel scans running at the same time
@@ -86,17 +87,20 @@ def main(args):
             lr_scheduler=scheduler,
             max_epochs=args.EPOCHS,
             max_patience=args.MAXPATIENCE,
+            batch_size=args.BATCH,
             random_seed=42 if args.TEST else np.random.randint(0, high=999999999999),
         )
 
         hist = likelihood.goodness_of_fit(
             test_dataset=data["X_test"], prob_per_bin=args.PROB
         )
-        pval = hist.residuals_pvalue
+        chi2_pval = hist.residuals_pvalue
         kst_pval = hist.kstest_pval
-        goodness_of_fit_test = all(np.greater_equal([pval, kst_pval], args.PVALTHRES))
-
-        print(f"1-CDF(residuals) = {pval*100:.2f}%, KS p-val: {kst_pval*100:.2f}%")
+        pval = min([chi2_pval, kst_pval])
+        goodness_of_fit_test = all(
+            np.greater_equal([chi2_pval, kst_pval], args.PVALTHRES)
+        )
+        print(f"   * p(χ²) = {chi2_pval*100:.4f}%, p(KS) = {kst_pval*100:.4f}%")
 
         # save only the best pval results
         if pval > best_pval or goodness_of_fit_test:
@@ -191,7 +195,20 @@ if __name__ == "__main__":
         dest="TRANSSTEP",
     )
     parameters.add_argument(
-        "--epochs", "-e", type=int, default=600, help="Number of epochs", dest="EPOCHS"
+        "--epochs",
+        "-e",
+        type=int,
+        default=600,
+        help="Number of epochs, defaults to 600",
+        dest="EPOCHS",
+    )
+    parameters.add_argument(
+        "--batch-size",
+        "-bs",
+        type=int,
+        default=100,
+        help="Batch size, defaults to 100",
+        dest="BATCH",
     )
     parameters.add_argument(
         "--pval-threshold",
