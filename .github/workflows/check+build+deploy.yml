@@ -33,7 +33,7 @@ jobs:
     - name: Test with pytest
       run: |
         nabu-fit-to-data -test -dp test/data-2020-025-transformed.npz -op test/results -e 20
-        # 1-CDF(residuals) = 1.97%, KS p-val: 0.64%
+        # * p(χ²) = 0.0041%, p(KS) = 19.5177%
         pytest test/*py
 
   build:
