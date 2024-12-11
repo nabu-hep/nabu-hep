@@ -87,14 +87,8 @@ def summary_plot(
         weights=weights,
     )
 
-    hist_pval_test = Histogram(
-        dim=deviations.shape[1],
-        bins=chi2.ppf(np.arange(0.0, 1.1, 0.1), df=deviations.shape[1]),
-        vals=chi2_test,
-    )
-
-    x = np.linspace(0, hist.max_val, 500)
-    chi2p = chi2.pdf(x, df=hist.dim)
+    beta = np.linspace(0, hist.max_val, 500)
+    chi2p = chi2.pdf(beta, df=hist.dim)
 
     fig = plt.figure()
     size = fig.get_size_inches()
@@ -128,7 +122,7 @@ def summary_plot(
     ax1.set_ylabel(r"${\rm Residuals}$")
 
     ax0.plot(
-        x, chi2p, color="tab:blue", label=r"$\chi^2({\rm DoF}= " + f"{hist.dim}" + ")$"
+        beta, chi2p, color="tab:blue", label=r"$\chi^2({\rm DoF}= " + f"{hist.dim}" + ")$"
     )
     ax0.legend(fontsize=16)
     ymin, ymax = ax0.get_ylim()
@@ -140,9 +134,9 @@ def summary_plot(
         0.0,
         ymax * 1.2,
         r"$p(\chi^2) = "
-        + rf"{hist_pval_test.residuals_pvalue*100.:.1f}\%,\ "
+        + rf"{hist.residuals_pvalue*100.:.1f}\%,\ "
         + r"p({\rm KS}) = "
-        + rf"{hist_pval_test.kstest_pval*100:.1f}\%"
+        + rf"{hist.kstest_pval*100:.1f}\%"
         + "$",
         color="darkred",
         fontsize=20,
