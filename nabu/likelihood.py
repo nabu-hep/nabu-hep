@@ -119,6 +119,21 @@ class Likelihood(ABC):
         )
         return Histogram(dim=dim, bins=bins, vals=np.sum(deviations**2, axis=1))
 
+    def is_valid(self, test_data: np.ndarray, threshold: float = 0.03) -> bool:
+        """
+        Check if the likelihood is valid for a given dataset.
+
+        Args:
+            test_data (``np.ndarray``): Test dataset
+            threshold (``float``, default ``0.03``): p-value threshold.
+
+        Returns:
+            ``bool``:
+            Returns `True` if the model passes the threshold.
+        """
+        hist: Histogram = self.goodness_of_fit(test_dataset=test_data, prob_per_bin=0.1)
+        return all(np.greater_equal([hist.residuals_pvalue, hist.kstest_pval], threshold))
+
     @abstractmethod
     def to_dict(self) -> dict:
         """convert model to dictionary"""
