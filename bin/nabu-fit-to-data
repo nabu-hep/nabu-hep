@@ -4,6 +4,7 @@
 import argparse
 import os
 from datetime import datetime
+from pathlib import Path
 
 import jax
 import numpy as np
@@ -44,8 +45,13 @@ def main(args):
     X_train = data["X_train"]
     dim = X_train.shape[1]
     if 0.0 < args.DATAFRAC < 1.0:
-        X_train = X_train[: int(X_train.shape[0] * args.DATAFRAC)]
-        print(f"Training for {X_train.shape[0]} samples")
+        choose = np.arange(0, int(X_train.shape[0] * args.DATAFRAC))
+        np.random.shuffle(choose)
+        X_train = X_train[choose]
+    print(
+        f"Training for {X_train.shape[0]} samples. "
+        "Pour yourself a cup of coffee; this will take some time..."
+    )
 
     transformer = {
         "affine": None,
@@ -265,6 +271,7 @@ if __name__ == "__main__":
         "Notice that `X_train` corresponds to the samples that will be used for training and "
         "`X_test` corresponds to the data that will be used for testing.",
         dest="DATAPATH",
+        required=True,
     )
     dataset.add_argument(
         "--train-frac",
@@ -319,6 +326,16 @@ if __name__ == "__main__":
     args.OUTPATH = os.path.join(args.OUTPATH, args.OUTNAME)
     if not os.path.isdir(args.OUTPATH):
         os.mkdir(args.OUTPATH)
+
+    # check data
+    data_path = Path(args.DATAPATH)
+    if not data_path.is_file():
+        raise ValueError(f"Can not find dataset: {data_path}")
+    if data_path.suffix != ".npz":
+        raise ValueError(
+            "Input file needs to be a compressed NumPy file with .npz extension,"
+            f" {data_path.suffix} is given."
+        )
 
     print("<><><> Arguments <><><>")
     for key, item in vars(args).items():
