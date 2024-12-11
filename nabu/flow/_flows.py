@@ -174,7 +174,7 @@ def coupling_flow(
     flow_layers: int = 8,
     nn_width: int = 50,
     activation: str = "relu",
-    permutation: jnp.array = None,
+    permutation: list[int] = None,
     random_seed: int = 0,
 ) -> Transformed:
     """
@@ -204,6 +204,8 @@ def coupling_flow(
     activation = _get_activation(activation)
     transformer = transformer or _affine_with_min_scale()
     base_dist = Normal(jnp.zeros(dim))
+    if permutation is not None:
+        permutation = jnp.array(permutation)
 
     def make_layer(key):  # coupling layer + permutation
         bij_key, perm_key = jr.split(key)
@@ -233,7 +235,7 @@ def block_neural_autoregressive_flow(
     flow_layers: int = 1,
     activation: str = "sigmoid",
     inverter: Callable = None,
-    permutation: jnp.array = None,
+    permutation: list[int] = None,
     random_seed: int = 0,
 ) -> Transformed:
     """
@@ -262,7 +264,7 @@ def block_neural_autoregressive_flow(
             ``BlockAutoregressiveNetwork`` bijection. Must have the signature
             ``inverter(bijection, y, condition=None)``. Defaults to using a bisection
             search via ``AutoregressiveBisectionInverter``.
-        permutation (``jnp.array``, default ``None``): Permutation of the features, if
+        permutation (``list[int]``, default ``None``): Permutation of the features, if
             ``None`` it will be randomly shuffled.
         random_seed (``int``, default ``0``): random seed
 
@@ -273,6 +275,8 @@ def block_neural_autoregressive_flow(
     key = jr.key(random_seed)
     base_dist = Normal(jnp.zeros(dim))
     activation = _get_activation(activation)
+    if permutation is not None:
+        permutation = jnp.array(permutation)
 
     def make_layer(key):  # bnaf layer + permutation
         bij_key, perm_key = jr.split(key)
