@@ -12,6 +12,7 @@ from flowjax.train.train_utils import count_fruitless, get_batches, step, train_
 from jaxtyping import ArrayLike, PRNGKeyArray, PyTree
 from tqdm import tqdm
 
+import matplotlib.pyplot as plt
 
 def batch_split(
     data: np.array, batch_size: int, shuffle: bool = True
@@ -54,6 +55,7 @@ def fit(
     return_best: bool = True,
     show_progress: bool = True,
     lr_scheduler=None,
+    plot_progress: str = None,
 ):
     r"""Train a PyTree (e.g. a distribution) to samples from the target.
 
@@ -80,6 +82,8 @@ def fit(
             was reached (when True), or the parameters after the last update (when
             False). Defaults to True.
         show_progress: Whether to show progress bar. Defaults to True.
+        lr_scheduler: Learning rate scheduler. Defaults to None.
+        plot_progress: Name of the monitoring plots. If given: plot the model once in a while to monitor progress visually. Defaults to None.
 
     Returns:
         A tuple containing the trained distribution and the losses.
@@ -162,6 +166,26 @@ def fit(
         ):
             loop.set_postfix_str(f"{loop.postfix} (inf or nan loss)")
             break
+
+        if plot_progress is not None:
+            # plot the data in 2d histograms and the model in 2d histograms
+            current_dist = eqx.combine(params, static)
+            sample = current_dist.sample(jr.key(123), (100000,))
+            if train_data[0].shape[1] == 1:
+                plt.hist(train_data[0], bins=100, histtype="step", label="original", color='blue', density=True)
+                plt.hist(sample, bins=100, histtype="step", label="resampled", color='red', density=True)
+                plt.legend()
+            else:
+                fig, ax = plt.subplots(train_data[0].shape[1], train_data[0].shape[1], figsize=(10, 10))
+                for c1 in range(train_data[0].shape[1]):
+                    for c2 in range(train_data[0].shape[1]):
+                        if c1 <= c2:
+                            continue
+                        ax[c1, c2].hist2d(*train_data[0][:, [c1, c2]].T, bins=100)
+                        ax[c2, c1].hist2d(*sample[:, [c1, c2]].T, bins=100)
+                fig.suptitle('Lower left: data | upper right: model')
+            plt.savefig(f"{plot_progress}{epoch}.pdf")
+            plt.close()
 
     params = best_params if return_best else params
     dist = eqx.combine(params, static)
