@@ -1,4 +1,4 @@
-from typing import Any, Literal, Tuple
+from typing import Any, Literal
 
 import jax.numpy as jnp
 import numpy as np
@@ -26,7 +26,7 @@ class PosteriorTransform:
 
     def __init__(
         self,
-        name: Literal["mean_std", "dalitz", "min-max", "user-defined"] = None,
+        name: Literal["shift-scale", "dalitz", "user-defined"] = None,
         **kwargs,
     ):
         """
@@ -34,10 +34,9 @@ class PosteriorTransform:
 
         Args:
             name (``Text``, default ``None``): Identifier of the implementation
-                * ``mean_std``: this input expects user to provide a list of mean values
-                    and a list of standard deviations for the features
-                    * ``mean``: mean values of the features
-                    * ``std``: standard deviations
+                * ``shift-scale``:
+                    * ``shift``: shift the dataset
+                    * ``scale``: scale the dataset
                 * ``dalitz``: this identifier initialise conversion from a dalitz distribution to
                     square distribution within [0,1]
                     * ``md``: mother particle mass
@@ -50,9 +49,11 @@ class PosteriorTransform:
                     * ``backward``: a function that takes array as input and returns an array
                         with same dimensionality. This is used to convert features to the physical basis
         """
-        if name == "mean_std":
-            mean, scale = jnp.array(kwargs["mean"]), jnp.array(kwargs["std"])
-            self._metadata = {"mean_std": {"mean": mean.tolist(), "std": scale.tolist()}}
+        if name == "shift-scale":
+            mean, scale = jnp.array(kwargs["shift"]), jnp.array(kwargs["scale"])
+            self._metadata = {
+                "shift-scale": {"shift": mean.tolist(), "scale": scale.tolist()}
+            }
 
             def forward(x):
                 return (x - mean) / scale
@@ -74,19 +75,6 @@ class PosteriorTransform:
 
             def backward(x):
                 return square_to_dalitz(x, md, ma, mb, mc)
-
-        elif name == "min-max":
-            minimum, scale = jnp.array(kwargs["minimum"]), jnp.array(kwargs["scale"])
-
-            self._metadata = {
-                "min-max": {"minimum": minimum.tolist(), "scale": scale.tolist()}
-            }
-
-            def forward(x):
-                return (x - minimum) / scale
-
-            def backward(x):
-                return x * scale + minimum
 
         elif name is None:
             forward = lambda x: x
@@ -111,14 +99,9 @@ class PosteriorTransform:
         return self._metadata
 
     @classmethod
-    def from_mean_std(cls, mean: list[float], std: list[float]):
-        """Generate transform from mean and standard deviation"""
-        return cls("mean_std", mean=mean, std=std)
-
-    @classmethod
-    def from_min_max(cls, minimum: list[float], scale: list[float]):
-        """Generate transform from min-max"""
-        return cls("min-max", minimum=minimum, scale=scale)
+    def from_shift_scale(cls, shift: list[float], scale: list[float]):
+        """Shift and scale the dataset"""
+        return cls("shift-scale", shift=shift, scale=scale)
 
     @classmethod
     def from_dalitz(cls, md: float, ma: float, mb: float, mc: float):
@@ -169,7 +152,10 @@ def standardise_between_zero_and_one(
     """
     mean = np.min(data, axis=0)
     scale = np.max(data, axis=0) - np.min(data, axis=0)
-    return PosteriorTransform("mean_std", mean=mean, std=scale), (data - mean) / scale
+    return (
+        PosteriorTransform.from_shift_scale(shift=mean, scale=scale),
+        (data - mean) / scale,
+    )
 
 
 def standardise_between_negone_and_one(
@@ -188,7 +174,10 @@ def standardise_between_negone_and_one(
     mn = np.min(data, axis=0)
     scale = (np.max(data, axis=0) - mn) / 2.0
     mean = mn + scale
-    return PosteriorTransform("mean_std", mean=mean, std=scale), (data - mean) / scale
+    return (
+        PosteriorTransform.from_shift_scale(shift=mean, scale=scale),
+        (data - mean) / scale,
+    )
 
 
 def standardise_median_quantile(
@@ -207,7 +196,10 @@ def standardise_median_quantile(
     q = (1 - (norm.cdf(1) - norm.cdf(-1))) / 2
     mean = np.median(data, axis=0)
     scale = np.quantile(data, 1 - q, axis=0) - np.quantile(data, q, axis=0)
-    return PosteriorTransform("mean_std", mean=mean, std=scale), (data - mean) / scale
+    return (
+        PosteriorTransform.from_shift_scale(shift=mean, scale=scale),
+        (data - mean) / scale,
+    )
 
 
 def standardise_mean_std(
@@ -225,4 +217,7 @@ def standardise_mean_std(
     """
     mean = np.mean(data, axis=0)
     scale = np.std(data, axis=0)
-    return PosteriorTransform("mean_std", mean=mean, std=scale), (data - mean) / scale
+    return (
+        PosteriorTransform.from_shift_scale(shift=mean, scale=scale),
+        (data - mean) / scale,
+    )
