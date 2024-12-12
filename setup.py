@@ -36,7 +36,7 @@ setup(
     author="Jack Y. Araz",
     author_email=("jack.araz@stonybrook.edu"),
     license="MIT",
-    packages=["nabu"],
+    packages=["nabu", "nabu.flow"],
     scripts=["bin/nabu-fit-to-data"],
     install_requires=requirements,
     python_requires=">=3.10",
