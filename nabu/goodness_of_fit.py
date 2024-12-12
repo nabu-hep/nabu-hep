@@ -71,7 +71,11 @@ def calculate_relative(method_fcn, values, variances):
 
 class Histogram:
     r"""
-    _summary_
+    Create a histogram object for the underlying :math:`\chi^2` distribution.
+
+    .. note::
+
+        This class assumes that the base distribution of the flow is unit gaussian.
 
     Args:
         dim (``int``): number of features.

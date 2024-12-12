@@ -114,7 +114,7 @@ class Likelihood(ABC):
         """Compute the cumulative density function at x shape (N,dof)"""
         return chi2.cdf(self.chi2(x), df=x.shape[-1])
 
-    def kstest_pvalue(self, x: np.ndarray) -> np.ndarray:
+    def kstest_pvalue(self, x: np.ndarray) -> float:
         """Compute p-value for Kolmogorov-Smirnov test"""
         return kstest(self.chi2(x), cdf=lambda x: chi2.cdf(x, df=x.shape[-1])).pvalue
 
@@ -124,15 +124,15 @@ class Likelihood(ABC):
         prob_per_bin: float = 0.1,
     ) -> Histogram:
         """
-        _summary_
+        Construct binned and unbinned goodness of fit test.
 
         Args:
-            test_dataset (``np.ndarray``): _description_
-            prob_per_bin (``float``, default ``0.1``): _description_
+            test_dataset (``np.ndarray``): test dataset, shape `(N, DoF)`
+            prob_per_bin (``float``, default ``0.1``): probability of yields in each bin
 
         Returns:
             ``Histogram``:
-            _description_
+            Goodness of fit base
         """
         dim = test_dataset.shape[-1]
         bins = chi2.ppf(
@@ -161,11 +161,11 @@ class Likelihood(ABC):
 
     def serialise(self) -> dict:
         """
-        _summary_
+        Serialise the underlying model
 
         Returns:
             ``dict``:
-            _description_
+            Description of the model
         """
         assert self.model_type != "base", "Invalid model type"
         return {
