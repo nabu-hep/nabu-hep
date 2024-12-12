@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import jax.random as jr
 import numpy as np
 from jax.tree_util import tree_structure
-from scipy.stats import chi2
+from scipy.stats import chi2, kstest
 
 from .goodness_of_fit import Histogram
 
@@ -114,6 +114,10 @@ class Likelihood(ABC):
         """Compute the cumulative density function at x shape (N,dof)"""
         return chi2.cdf(self.chi2(x), df=x.shape[-1])
 
+    def kstest_pvalue(self, x: np.ndarray) -> np.ndarray:
+        """Compute p-value for Kolmogorov-Smirnov test"""
+        return kstest(self.chi2(x), cdf=lambda x: chi2.cdf(x, df=x.shape[-1])).pvalue
+
     def goodness_of_fit(
         self,
         test_dataset: np.ndarray,
@@ -131,11 +135,10 @@ class Likelihood(ABC):
             _description_
         """
         dim = test_dataset.shape[-1]
-        deviations = self.compute_inverse(test_dataset)
         bins = chi2.ppf(
             np.linspace(0.0, 1.0, int(np.ceil(1.0 / prob_per_bin)) + 1), df=dim
         )
-        return Histogram(dim=dim, bins=bins, vals=np.sum(deviations**2, axis=1))
+        return Histogram(dim=dim, bins=bins, vals=self.chi2(test_dataset))
 
     def is_valid(self, test_data: np.ndarray, threshold: float = 0.03) -> bool:
         """
