@@ -3,10 +3,10 @@ name: Tests
 on:
   pull_request:
     branches: ["main", "releases/**"]
-    paths: ["*.py", "check+build+deploy.yml"]
+    paths: ["nabu/**.py", "test/**.py","check+build+deploy.yml"]
   push:
     branches: ["main", "releases/**", "testing"]
-    paths: ["*.py", "check+build+deploy.yml"]
+    paths: ["nabu/**.py", "test/**.py","check+build+deploy.yml"]
   workflow_dispatch:
 
 jobs:
