@@ -15,6 +15,7 @@ requirements = [
     "pyyaml",
     "setuptools",
     "tqdm>=4.64.0",
+    "matplotlib",
 ]
 
 setup(
@@ -51,7 +52,6 @@ setup(
         "Programming Language :: Python :: 3.12",
     ],
     extras_require={
-        "plt": ["matplotlib"],
         "dev": ["pytest>=7.1.2", "pytest-cov>=3.0.0", "twine>=3.7.1", "wheel>=0.37.1"],
     },
 )
