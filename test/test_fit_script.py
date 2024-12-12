@@ -13,9 +13,7 @@ def test_fit_script_output():
         lm = nabu.Likelihood.load("./test/results/TEST-RESULT-COMPLETE/model.nabu")
 
         lm_chi2 = lm.chi2(np.array([0.0, 0.0]))
-        assert np.isclose(
-            lm_chi2, 12.923215
-        ), f"chi^2 value is wrong, {chi2}"
+        assert np.isclose(lm_chi2, 12.923215), f"chi^2 value is wrong, {chi2}"
     except FileNotFoundError:
         assert False, "Model not found. Please execute pytest from the main folder."
 
