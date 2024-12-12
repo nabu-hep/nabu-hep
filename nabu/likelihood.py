@@ -112,7 +112,6 @@ class Likelihood(ABC):
 
     def cdf(self, x: np.ndarray) -> np.ndarray:
         """Compute the cumulative density function at x shape (N,dof)"""
-        x = np.expand_dims(x, 0) if len(x.shape) == 1 else x
         return chi2.cdf(self.chi2(x), df=x.shape[-1])
 
     def goodness_of_fit(
