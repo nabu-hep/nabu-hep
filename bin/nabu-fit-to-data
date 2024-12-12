@@ -45,9 +45,10 @@ def main(args):
     X_train = data["X_train"]
     dim = X_train.shape[1]
     if 0.0 < args.DATAFRAC < 1.0:
-        choose = np.arange(0, int(X_train.shape[0] * args.DATAFRAC))
+        choose = np.arange(0, X_train.shape[0])
         np.random.shuffle(choose)
-        X_train = X_train[choose]
+        X_train = X_train[choose[: int(X_train.shape[0] * args.DATAFRAC)]]
+        del choose
     print(
         f"Training for {X_train.shape[0]} samples. "
         "Pour yourself a cup of coffee; this will take some time..."
