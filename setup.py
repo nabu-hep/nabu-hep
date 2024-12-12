@@ -6,7 +6,16 @@ with open("README.md", encoding="utf-8") as f:
 with open("nabu/_version.py", encoding="UTF-8") as f:
     version = f.readlines()[-1].split()[-1].strip("\"'")
 
-requirements = ["equinox==0.11.7", "flowjax==15.1.0", "scipy>=1.10.0"]
+requirements = [
+    "numpy>=1.24.4, <2.0.0",
+    "jax==0.4.30",
+    "equinox==0.11.7",
+    "flowjax==15.1.0",
+    "scipy>=1.10.0",
+    "pyyaml",
+    "setuptools",
+    "tqdm>=4.64.0",
+]
 
 setup(
     name="nabu",
@@ -41,4 +50,8 @@ setup(
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
     ],
+    extras_require={
+        "plt": ["matplotlib"],
+        "dev": ["pytest>=7.1.2", "pytest-cov>=3.0.0", "twine>=3.7.1", "wheel>=0.37.1"],
+    },
 )
