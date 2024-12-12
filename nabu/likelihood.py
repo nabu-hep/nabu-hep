@@ -96,6 +96,16 @@ class Likelihood(ABC):
         """Compute log-probability"""
         return np.array(self.model.log_prob(self.transform.backward(x)))
 
+    def chi2(self, x):
+        """Compute the chi^2 value at x"""
+        dim = self.model.bijection.shape[0]
+        chi2 = (self.model.bijection.inverse(x)**2).sum()
+        return chi2
+
+    def cdf(self, x):
+        """Compute the cumulative density function at x"""
+        return scipy.stats.chi2(df=dim).cdf(self.chi2(x))
+
     def goodness_of_fit(
         self,
         test_dataset: np.ndarray,
