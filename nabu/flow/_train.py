@@ -7,7 +7,11 @@ from flowjax.train.losses import MaximumLikelihoodLoss
 from flowjax.train.train_utils import count_fruitless, get_batches, step, train_val_split
 from jaxtyping import ArrayLike, PRNGKeyArray, PyTree
 from tqdm import tqdm
-import matplotlib.pyplot as plt
+
+try:
+    import matplotlib.pyplot as plt
+except ImportError:
+    plt = False
 
 __all__ = ["get_optimizer", "fit"]
 
@@ -149,26 +153,41 @@ def fit(
                 loop.set_postfix_str(f"{loop.postfix} (inf or nan loss)")
                 break
 
-            if plot_progress and (epoch % int(max_epochs/10) == 0):
+            if plot_progress and (epoch % int(max_epochs / 10) == 0) and plt:
                 # plot the data in 2d histograms and the model in 2d histograms
                 current_dist = eqx.combine(params, static)
                 sample = current_dist.sample(jr.key(123), (100000,))
                 if train_data[0].shape[1] == 1:
-                    plt.hist(train_data[0], bins=100, histtype="step", label="original", color='blue', density=True)
-                    plt.hist(sample, bins=100, histtype="step", label="resampled", color='red', density=True)
+                    plt.hist(
+                        train_data[0],
+                        bins=100,
+                        histtype="step",
+                        label="original",
+                        color="blue",
+                        density=True,
+                    )
+                    plt.hist(
+                        sample,
+                        bins=100,
+                        histtype="step",
+                        label="resampled",
+                        color="red",
+                        density=True,
+                    )
                     plt.legend()
                 else:
-                    fig, ax = plt.subplots(train_data[0].shape[1], train_data[0].shape[1], figsize=(10, 10))
+                    fig, ax = plt.subplots(
+                        train_data[0].shape[1], train_data[0].shape[1], figsize=(10, 10)
+                    )
                     for c1 in range(train_data[0].shape[1]):
                         for c2 in range(train_data[0].shape[1]):
                             if c1 <= c2:
                                 continue
                             ax[c1, c2].hist2d(*train_data[0][:, [c1, c2]].T, bins=100)
                             ax[c2, c1].hist2d(*sample[:, [c1, c2]].T, bins=100)
-                    fig.suptitle('Lower left: data | upper right: model')
+                    fig.suptitle("Lower left: data | upper right: model")
                 plt.savefig(f"{plot_progress}{epoch}.pdf")
                 plt.close()
-
 
     except KeyboardInterrupt:
         print("Training interrupted by the user")

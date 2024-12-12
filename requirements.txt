@@ -1,5 +1,0 @@
-jax
-flowjax
-pyyaml
-scipy>=1.10.0
-matplotlib
