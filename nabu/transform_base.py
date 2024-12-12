@@ -1,12 +1,20 @@
-from typing import Any, Literal
+from typing import Any, Literal, Tuple
 
 import jax.numpy as jnp
+import numpy as np
+from scipy.stats import norm
 
 from .dalitz_utils import dalitz_to_square, square_to_dalitz
 
 Array = Any
 
-__all__ = ["PosteriorTransform"]
+__all__ = [
+    "PosteriorTransform",
+    "standardise_between_negone_and_one",
+    "standardise_between_zero_and_one",
+    "standardise_median_quantile",
+    "standardise_mean_std",
+]
 
 
 def __dir__():
@@ -144,3 +152,77 @@ class PosteriorTransform:
             Original data
         """
         return jnp.array(self._backward(y))
+
+
+def standardise_between_zero_and_one(
+    data: np.ndarray,
+) -> tuple[PosteriorTransform, np.ndarray]:
+    """
+    standardise data between [0,1]
+
+    Args:
+        data (``np.ndarray``): dataset with shape (N, M). N=number of data, M=number of features
+
+    Returns:
+        ``Tuple[PosteriorTransform, np.ndarray]``:
+        Transform function and standardised data.
+    """
+    mean = np.min(data, axis=0)
+    scale = np.max(data, axis=0) - np.min(data, axis=0)
+    return PosteriorTransform("mean_std", mean=mean, std=scale), (data - mean) / scale
+
+
+def standardise_between_negone_and_one(
+    data: np.ndarray,
+) -> tuple[PosteriorTransform, np.ndarray]:
+    """
+    standardise data between [-1,1]
+
+    Args:
+        data (``np.ndarray``): dataset with shape (N, M). N=number of data, M=number of features
+
+    Returns:
+        ``Tuple[PosteriorTransform, np.ndarray]``:
+        Transform function and standardised data.
+    """
+    mn = np.min(data, axis=0)
+    scale = (np.max(data, axis=0) - mn) / 2.0
+    mean = mn + scale
+    return PosteriorTransform("mean_std", mean=mean, std=scale), (data - mean) / scale
+
+
+def standardise_median_quantile(
+    data: np.ndarray,
+) -> tuple[PosteriorTransform, np.ndarray]:
+    """
+    _summary_
+
+    Args:
+        data (``np.ndarray``): dataset with shape (N, M). N=number of data, M=number of features
+
+    Returns:
+        ``Tuple[PosteriorTransform, np.ndarray]``:
+        Transform function and standardised data.
+    """
+    q = (1 - (norm.cdf(1) - norm.cdf(-1))) / 2
+    mean = np.median(data, axis=0)
+    scale = np.quantile(data, 1 - q, axis=0) - np.quantile(data, q, axis=0)
+    return PosteriorTransform("mean_std", mean=mean, std=scale), (data - mean) / scale
+
+
+def standardise_mean_std(
+    data: np.ndarray,
+) -> tuple[PosteriorTransform, np.ndarray]:
+    """
+    _summary_
+
+    Args:
+        data (``np.ndarray``): dataset with shape (N, M). N=number of data, M=number of features
+
+    Returns:
+        ``Tuple[PosteriorTransform, np.ndarray]``:
+        Transform function and standardised data.
+    """
+    mean = np.mean(data, axis=0)
+    scale = np.std(data, axis=0)
+    return PosteriorTransform("mean_std", mean=mean, std=scale), (data - mean) / scale
