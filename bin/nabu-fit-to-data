@@ -31,6 +31,9 @@ try:
             ax0.set_yscale("log")
         ax1.plot(losses["lr"])
         ax1.set_yscale("log")
+        ax0.set_xlabel("Epochs")
+        ax0.set_ylabel("Loss")
+        ax1.set_xlabel("Epochs")
         plt.savefig(name)
         plt.close("all")
 
