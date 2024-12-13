@@ -71,6 +71,9 @@ def main(args):
             print("Found a completed scan.")
             break
 
+        model_random_seed = 42 if args.TEST else np.random.randint(0, high=999999999999)
+        fit_random_seed = 42 if args.TEST else np.random.randint(0, high=999999999999)
+
         llhd_constructor = get_flow("masked_autoregressive_flow")
         likelihood: Likelihood = llhd_constructor(
             dim=dim,
@@ -80,7 +83,7 @@ def main(args):
             nn_depth=args.NNDEPTH,
             activation=args.ACTIVATION,
             permutation=list(reversed(range(dim))),
-            random_seed=42 if args.TEST else np.random.randint(0, high=999999999999),
+            random_seed=model_random_seed,
         )
 
         scheduler = optax.exponential_decay(
@@ -99,7 +102,7 @@ def main(args):
             max_epochs=args.EPOCHS,
             max_patience=args.MAXPATIENCE,
             batch_size=args.BATCH,
-            random_seed=42 if args.TEST else np.random.randint(0, high=999999999999),
+            random_seed=fit_random_seed,
         )
 
         hist = likelihood.goodness_of_fit(
@@ -131,6 +134,21 @@ def main(args):
                 os.path.join(args.OUTPATH, "deviations.npz"),
                 deviations=likelihood.compute_inverse(data["X_test"]),
             )
+            # Save random seeds
+            with open(
+                os.path.join(args.OUTPATH, "config.yaml"), "r", encoding="utf-8"
+            ) as f:
+                config = yaml.safe_load(f)
+            config.update(
+                {
+                    "model_random_seed": model_random_seed,
+                    "fit_random_seed": fit_random_seed,
+                }
+            )
+            with open(
+                os.path.join(args.OUTPATH, "config.yaml"), "w", encoding="utf-8"
+            ) as f:
+                yaml.safe_dump(config, f)
             os.rename(args.OUTPATH, args.OUTPATH + "-COMPLETE")
             break
 
