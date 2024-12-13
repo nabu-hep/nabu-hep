@@ -51,14 +51,24 @@ class PosteriorTransform:
         """
         if name == "shift-scale":
             mean, scale = jnp.array(kwargs["shift"]), jnp.array(kwargs["scale"])
+            log_axes = kwargs.get("log_axes", None)
             self._metadata = {
-                "shift-scale": {"shift": mean.tolist(), "scale": scale.tolist()}
+                "shift-scale": {
+                    "shift": mean.tolist(),
+                    "scale": scale.tolist(),
+                    "log_axes": log_axes,
+                }
             }
 
             def forward(x):
-                return (x - mean) / scale
+                x_new = (x - mean) / scale
+                if log_axes is not None:
+                    x_new[:, log_axes] = np.log(x_new[:, log_axes])
+                return x_new
 
             def backward(x):
+                if log_axes is not None:
+                    x[:, log_axes] = np.exp(x[:, log_axes])
                 return x * scale + mean
 
         elif name == "dalitz":
@@ -99,9 +109,11 @@ class PosteriorTransform:
         return self._metadata
 
     @classmethod
-    def from_shift_scale(cls, shift: list[float], scale: list[float]):
+    def from_shift_scale(
+        cls, shift: list[float], scale: list[float], log_axes: list[int] = None
+    ):
         """Shift and scale the dataset"""
-        return cls("shift-scale", shift=shift, scale=scale)
+        return cls("shift-scale", shift=shift, scale=scale, log_axes=log_axes)
 
     @classmethod
     def from_dalitz(cls, md: float, ma: float, mb: float, mc: float):
@@ -138,7 +150,7 @@ class PosteriorTransform:
 
 
 def standardise_between_zero_and_one(
-    data: np.ndarray,
+    data: np.ndarray, log_axes: list[int] = None, eps: float = 1e-6
 ) -> tuple[PosteriorTransform, np.ndarray]:
     """
     standardise data between [0,1]
@@ -150,11 +162,16 @@ def standardise_between_zero_and_one(
         ``Tuple[PosteriorTransform, np.ndarray]``:
         Transform function and standardised data.
     """
-    mean = np.min(data, axis=0)
+    mean = np.min(data, axis=0) - eps
     scale = np.max(data, axis=0) - np.min(data, axis=0)
+
+    new_data = (data - mean) / scale
+    if log_axes is not None:
+        new_data[:, log_axes] = np.log(new_data[:, log_axes])
+
     return (
-        PosteriorTransform.from_shift_scale(shift=mean, scale=scale),
-        (data - mean) / scale,
+        PosteriorTransform.from_shift_scale(shift=mean, scale=scale, log_axes=log_axes),
+        new_data,
     )
 
 
