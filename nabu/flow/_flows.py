@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from functools import partial, wraps
+import warnings
 
 import equinox as eqx
 import jax
@@ -32,7 +33,7 @@ from jax.nn.initializers import glorot_uniform
 from jaxtyping import PRNGKeyArray
 
 from ._flow_likelihood import FlowLikelihood
-from ._serialisation_utils import serialise_wrapper
+from ._serialisation_utils import serialise_wrapper, BijectorWrapper
 
 __all__ = [
     "masked_autoregressive_flow",
@@ -457,13 +458,17 @@ def register_flow(func: Callable) -> Callable:
     """
     assert callable(func), "Invalid input, function needs to be callable."
     if func.__name__ in _flow_registry:
-        raise FlowRegistrationError(f"{func.__name__} is already registered.")
+        warnings.warn(
+            f"{func.__name__} is already registered. "
+            "This action will overwrite the previous implementation."
+        )
     registered_function = serialise_wrapper(func)
 
     @wraps(registered_function)
     def wrapper(*args, **kwargs):
         assert all(
-            not callable(f) for f in args + list(kwargs.values())
+            not callable(f) or isinstance(f, BijectorWrapper)
+            for f in list(args) + list(kwargs.values())
         ), "Callable functions for the inputs are currently not supported"
         return registered_function(*args, **kwargs)
 
