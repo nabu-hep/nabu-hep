@@ -1,17 +1,13 @@
 import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jr
+import matplotlib.pyplot as plt
 import optax
 from flowjax import wrappers
 from flowjax.train.losses import MaximumLikelihoodLoss
 from flowjax.train.train_utils import count_fruitless, get_batches, step, train_val_split
 from jaxtyping import ArrayLike, PRNGKeyArray, PyTree
 from tqdm import tqdm
-
-try:
-    import matplotlib.pyplot as plt
-except ImportError:
-    plt = False
 
 __all__ = ["get_optimizer", "fit"]
 
@@ -23,6 +19,19 @@ def __dir__():
 def get_optimizer(opt: str):
     """Retreive the optimiser"""
     return {"adam": optax.adam, "sgd": optax.sgd, "adagrad": optax.adagrad}[opt]
+
+
+def _append_metric(
+    metric: callable, history: dict[str, list[float]], tag: str
+) -> dict[str, list[float]]:
+    """add metric to history"""
+    for key, item in metric.items():
+        name = tag + "_" + key
+        if name in history:
+            history[name].append(item)
+        else:
+            history.update({name: [item]})
+    return history
 
 
 def fit(
@@ -40,6 +49,7 @@ def fit(
     show_progress: bool = True,
     lr_scheduler=None,
     plot_progress: str = None,
+    metrics: list[callable] = None,
 ):
     r"""Train a PyTree (e.g. a distribution) to samples from the target.
 
@@ -94,6 +104,8 @@ def fit(
         "lr": [float(opt_state.hyperparams["learning_rate"])],
     }
 
+    metrics = metrics or []
+
     loop = tqdm(
         range(max_epochs),
         disable=not show_progress,
@@ -123,6 +135,10 @@ def fit(
                 )
                 batch_losses.append(loss_i)
             losses["train"].append((sum(batch_losses) / len(batch_losses)).item())
+            for metric in metrics:
+                losses = _append_metric(
+                    metric(eqx.combine(params, static), train_data[0]), losses, "train"
+                )
 
             # Val epoch
             batch_losses = []
@@ -131,6 +147,10 @@ def fit(
                 loss_i = loss_fn(params, static, *batch, key=subkey)
                 batch_losses.append(loss_i)
             losses["val"].append((sum(batch_losses) / len(batch_losses)).item())
+            for metric in metrics:
+                losses = _append_metric(
+                    metric(eqx.combine(params, static), val_data[0]), losses, "val"
+                )
 
             if lr_scheduler is not None:
                 opt_state.hyperparams["learning_rate"] = lr_scheduler(epoch + 1)

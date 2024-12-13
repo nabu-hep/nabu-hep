@@ -74,6 +74,7 @@ class FlowLikelihood(Likelihood):
         verbose: bool = True,
         random_seed: int = np.random.randint(0, high=999999999999),
         plot_progress: str = None,
+        metrics: list[callable] = None,
     ) -> dict[str, list[float]]:
         """
         Fit likelihood to the data
@@ -114,6 +115,7 @@ class FlowLikelihood(Likelihood):
             show_progress=verbose,
             check_every=check_every,
             plot_progress=plot_progress,
+            metrics=metrics,
         )
         self.model = flow
         return history
