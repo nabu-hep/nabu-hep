@@ -96,6 +96,8 @@ def main(args):
 
         history = likelihood.fit_to_data(
             dataset=X_train,
+            L1_regularisation_coef=args.L1,
+            L2_regularisation_coef=args.L2,
             learning_rate=args.LR,
             optimizer="adam",
             lr_scheduler=scheduler,
@@ -196,6 +198,22 @@ if __name__ == "__main__":
     )
     parameters.add_argument(
         "-mlr", type=float, default=1e-4, help="minlearning rate", dest="MINLR"
+    )
+    parameters.add_argument(
+        "--l1-regularisation",
+        "-l1",
+        type=float,
+        default=0.0,
+        help="L1 Regularisation coefficient, defaults to 0.",
+        dest="L1",
+    )
+    parameters.add_argument(
+        "--l2-regularisation",
+        "-l2",
+        type=float,
+        default=0.0,
+        help="L2 Regularisation coefficient, defaults to 0.",
+        dest="L2",
     )
     parameters.add_argument(
         "--max-patience",
