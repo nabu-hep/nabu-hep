@@ -62,6 +62,8 @@ class FlowLikelihood(Likelihood):
     def fit_to_data(
         self,
         dataset: np.ndarray,
+        L1_regularisation_coef: float = 0.0,
+        L2_regularisation_coef: float = 0.0,
         condition: np.ndarray = None,
         learning_rate: float = 1e-4,
         optimizer: str = "adam",
@@ -105,6 +107,8 @@ class FlowLikelihood(Likelihood):
             key=jr.key(random_seed),
             dist=self.model,
             x=self.transform.backward(dataset),
+            L1_regularisation_coef=L1_regularisation_coef,
+            L2_regularisation_coef=L2_regularisation_coef,
             condition=condition,
             optimizer=optimizer,
             max_epochs=max_epochs,

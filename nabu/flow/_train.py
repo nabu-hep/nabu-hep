@@ -4,9 +4,11 @@ import jax.random as jr
 import matplotlib.pyplot as plt
 import optax
 from flowjax import wrappers
-from flowjax.train.losses import MaximumLikelihoodLoss
+from flowjax.distributions import AbstractDistribution
 from flowjax.train.train_utils import count_fruitless, get_batches, step, train_val_split
-from jaxtyping import ArrayLike, PRNGKeyArray, PyTree
+from flowjax.wrappers import unwrap
+from jax.tree_util import tree_leaves
+from jaxtyping import Array, ArrayLike, Float, PRNGKeyArray, PyTree
 from tqdm import tqdm
 
 __all__ = ["get_optimizer", "fit"]
@@ -34,10 +36,43 @@ def _append_metric(
     return history
 
 
+class MaximumLikelihoodLoss:
+    """Loss for fitting a flow with maximum likelihood (negative log likelihood).
+
+    This loss can be used to learn either conditional or unconditional distributions.
+    """
+
+    def __init__(self, l1: float = 0.0, l2: float = 0.0):
+        self.l1 = l1
+        self.l2 = l2
+
+    @eqx.filter_jit
+    def __call__(
+        self,
+        params: AbstractDistribution,
+        static: AbstractDistribution,
+        x: Array,
+        condition: Array = None,
+        key: PRNGKeyArray = None,
+    ) -> Float[Array, ""]:
+        """Compute the loss. Key is ignored (for consistency of API)."""
+        dist = unwrap(eqx.combine(params, static))
+        nll = -dist.log_prob(x, condition).mean()
+
+        if self.l2 != 0.0:
+            nll += self.l2 * sum(jnp.sum(jnp.square(p)) for p in tree_leaves(params))
+        if self.l1 != 0.0:
+            nll += self.l1 * sum(jnp.sum(jnp.abs(p)) for p in tree_leaves(params))
+
+        return nll
+
+
 def fit(
     key: PRNGKeyArray,
     dist: PyTree,
     x: ArrayLike,
+    L1_regularisation_coef: float = 0.0,
+    L2_regularisation_coef: float = 0.0,
     condition: ArrayLike = None,
     optimizer: optax.GradientTransformation = None,
     max_epochs: int = 100,
@@ -85,7 +120,7 @@ def fit(
     data = (x,) if condition is None else (x, condition)
     data = tuple(jnp.asarray(a) for a in data)
 
-    loss_fn = MaximumLikelihoodLoss()
+    loss_fn = MaximumLikelihoodLoss(l1=L1_regularisation_coef, l2=L2_regularisation_coef)
 
     params, static = eqx.partition(
         dist,
