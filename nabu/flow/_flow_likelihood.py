@@ -121,5 +121,5 @@ class FlowLikelihood(Likelihood):
             plot_progress=plot_progress,
             metrics=metrics,
         )
-        self.model = flow
+        self._model = flow
         return history

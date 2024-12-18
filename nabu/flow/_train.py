@@ -208,7 +208,7 @@ def fit(
                 loop.set_postfix_str(f"{loop.postfix} (inf or nan loss)")
                 break
 
-            if plot_progress and (epoch % int(max_epochs / 10) == 0) and plt:
+            if plot_progress and (epoch % int(max_epochs / 10) == 0):
                 # plot the data in 2d histograms and the model in 2d histograms
                 current_dist = eqx.combine(params, static)
                 sample = current_dist.sample(jr.key(123), (100000,))
