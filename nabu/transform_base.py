@@ -132,7 +132,7 @@ class PosteriorTransform:
             ``Array``:
             Transformed data
         """
-        return jnp.array(self.forward(x))
+        return jnp.array(self._forward(x))
 
     def backward(self, y: Array) -> Array:
         """
