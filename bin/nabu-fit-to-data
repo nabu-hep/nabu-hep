@@ -55,7 +55,9 @@ def main(args):
         "affine": None,
         "rqs": RationalQuadraticSpline(
             knots=args.KNOTS,
-            interval=args.INTERVAL[0] if len(args.INTERVAL) == 1 else args.INTERVAL,
+            interval=args.INTERVAL[0]
+            if len(args.INTERVAL) == 1
+            else tuple(args.INTERVAL),
         ),
     }[args.TRANS]
 
