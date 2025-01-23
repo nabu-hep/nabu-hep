@@ -78,7 +78,7 @@ def main(args):
             nn_width=args.NNWIDTH,
             nn_depth=args.NNDEPTH,
             activation=args.ACTIVATION,
-            permutation="reversed",
+            permutation=args.PERMUTATION,
             random_seed=model_random_seed,
         )
 
@@ -187,6 +187,15 @@ if __name__ == "__main__":
         choices=available_activations(),
         help="Activation function for MLP.",
         dest="ACTIVATION",
+    )
+    parameters.add_argument(
+        "--permutation",
+        "-p",
+        type=str,
+        default="reversed",
+        choices=["reversed", "random"],
+        help="Permutation for the flow, defaults to reversed.",
+        dest="PERMUTATION",
     )
     parameters.add_argument(
         "-lr", type=float, default=1e-3, help="learning rate", dest="LR"
