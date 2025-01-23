@@ -52,22 +52,29 @@ class PosteriorTransform:
         if name == "shift-scale":
             mean, scale = jnp.array(kwargs["shift"]), jnp.array(kwargs["scale"])
             log_axes = kwargs.get("log_axes", None)
+            log_shift = kwargs.get("log_shift", None)
+            log_scale = kwargs.get("log_scale", None)
             self._metadata = {
                 "shift-scale": {
                     "shift": mean.tolist(),
                     "scale": scale.tolist(),
                     "log_axes": log_axes,
+                    "log_shift": log_shift.tolist() if log_shift is not None else None,
+                    "log_scale": log_scale.tolist() if log_scale is not None else None,
                 }
             }
 
             def forward(x):
+                x = np.array(x)
                 x_new = (x - mean) / scale
                 if log_axes is not None:
                     x_new[:, log_axes] = np.log(x_new[:, log_axes])
+                    x_new[:, log_axes] = (x_new[:, log_axes] - log_shift) / log_scale
                 return x_new
 
             def backward(x):
                 if log_axes is not None:
+                    x[:, log_axes] = x[:, log_axes] * log_scale + log_shift
                     x[:, log_axes] = np.exp(x[:, log_axes])
                 return x * scale + mean
 
@@ -110,10 +117,22 @@ class PosteriorTransform:
 
     @classmethod
     def from_shift_scale(
-        cls, shift: list[float], scale: list[float], log_axes: list[int] = None
+        cls,
+        shift: list[float],
+        scale: list[float],
+        log_axes: list[int] = None,
+        log_shift=None,
+        log_scale=None,
     ):
         """Shift and scale the dataset"""
-        return cls("shift-scale", shift=shift, scale=scale, log_axes=log_axes)
+        return cls(
+            "shift-scale",
+            shift=shift,
+            scale=scale,
+            log_axes=log_axes,
+            log_shift=log_shift,
+            log_scale=log_scale,
+        )
 
     @classmethod
     def from_dalitz(cls, md: float, ma: float, mb: float, mc: float):
@@ -162,15 +181,25 @@ def standardise_between_zero_and_one(
         ``Tuple[PosteriorTransform, np.ndarray]``:
         Transform function and standardised data.
     """
+    log_shift, log_scale = None, None
     mean = np.min(data, axis=0) - eps
     scale = np.max(data, axis=0) - np.min(data, axis=0)
 
     new_data = (data - mean) / scale
     if log_axes is not None:
         new_data[:, log_axes] = np.log(new_data[:, log_axes])
+        log_shift = np.min(new_data[:, log_axes], axis=0)
+        log_scale = np.max(new_data[:, log_axes], axis=0) - log_shift
+        new_data[:, log_axes] = (new_data[:, log_axes] - log_shift) / log_scale
 
     return (
-        PosteriorTransform.from_shift_scale(shift=mean, scale=scale, log_axes=log_axes),
+        PosteriorTransform.from_shift_scale(
+            shift=mean,
+            scale=scale,
+            log_axes=log_axes,
+            log_shift=log_shift,
+            log_scale=log_scale,
+        ),
         new_data,
     )
 
