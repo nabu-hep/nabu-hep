@@ -190,7 +190,7 @@ if __name__ == "__main__":
     )
     parameters.add_argument(
         "--permutation",
-        "-p",
+        "-perm",
         type=str,
         default="reversed",
         choices=["reversed", "random"],
