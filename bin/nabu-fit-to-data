@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 import jax
+import matplotlib.pyplot as plt
 import numpy as np
 import optax
 import yaml
@@ -14,33 +15,25 @@ from scipy.stats import chi2
 
 from nabu import Likelihood
 from nabu.flow import RationalQuadraticSpline, available_activations, get_flow
+from nabu.plotting import summary_plot
 
-try:
-    import matplotlib.pyplot as plt
 
-    from nabu.plotting import summary_plot
-
-    def plot_history(losses: dict[str, list], name: str) -> None:
-        fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2, figsize=(9, 4))
-        ax0.plot(losses["train"], label="train")
-        ax0.plot(losses["val"], label="val")
-        ax0.legend()
-        if np.all(np.greater_equal(losses["train"], 0.0)) and np.all(
-            np.greater_equal(losses["train"], 0.0)
-        ):
-            ax0.set_yscale("log")
-        ax1.plot(losses["lr"])
-        ax1.set_yscale("log")
-        ax0.set_xlabel("Epochs")
-        ax0.set_ylabel("Loss")
-        ax1.set_xlabel("Epochs")
-        plt.savefig(name)
-        plt.close("all")
-
-except NotImplementedError:
-    summary_plot = None
-    plot_history = None
-    print("  -> Warning: Plotting is not available")
+def plot_history(losses: dict[str, list], name: str) -> None:
+    fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2, figsize=(9, 4))
+    ax0.plot(losses["train"], label="train")
+    ax0.plot(losses["val"], label="val")
+    ax0.legend()
+    if np.all(np.greater_equal(losses["train"], 0.0)) and np.all(
+        np.greater_equal(losses["train"], 0.0)
+    ):
+        ax0.set_yscale("log")
+    ax1.plot(losses["lr"])
+    ax1.set_yscale("log")
+    ax0.set_xlabel("Epochs")
+    ax0.set_ylabel("Loss")
+    ax1.set_xlabel("Epochs")
+    plt.savefig(name)
+    plt.close("all")
 
 
 def main(args):
@@ -60,7 +53,10 @@ def main(args):
 
     transformer = {
         "affine": None,
-        "rqs": RationalQuadraticSpline(knots=args.KNOTS, interval=args.INTERVAL),
+        "rqs": RationalQuadraticSpline(
+            knots=args.KNOTS,
+            interval=args.INTERVAL[0] if len(args.INTERVAL) == 1 else args.INTERVAL,
+        ),
     }[args.TRANS]
 
     best_pval = -1.0
@@ -121,14 +117,13 @@ def main(args):
         # save only the best pval results
         if pval > best_pval or goodness_of_fit_test:
             best_pval = pval
-            if summary_plot is not None:
-                _ = summary_plot(
-                    likelihood=likelihood,
-                    test_data=data["X_test"],
-                    bins=np.hstack([chi2.ppf(np.arange(0.0, 1.0, 0.1), df=dim), [20.0]]),
-                )
-                plt.savefig(os.path.join(args.OUTPATH, "summary_plot"))
-                plot_history(history, os.path.join(args.OUTPATH, "history.png"))
+            _ = summary_plot(
+                likelihood=likelihood,
+                test_data=data["X_test"],
+                bins=np.hstack([chi2.ppf(np.arange(0.0, 1.0, 0.1), df=dim), [20.0]]),
+            )
+            plt.savefig(os.path.join(args.OUTPATH, "summary_plot"))
+            plot_history(history, os.path.join(args.OUTPATH, "history.png"))
             likelihood.save(os.path.join(args.OUTPATH, "model.nabu"))
 
         if goodness_of_fit_test or args.TEST:
@@ -296,8 +291,10 @@ if __name__ == "__main__":
         "--interval",
         "-int",
         type=int,
-        default=4,
-        help="Interval for RQS only, defaults to 4",
+        nargs="+",
+        default=[4],
+        help="Interval for RQS only, defaults to 4. "
+        "If two value is given, will be considered as the lower and upper bounds.",
         dest="INTERVAL",
     )
 
