@@ -1,6 +1,7 @@
+import warnings
 from collections.abc import Callable
 from functools import partial, wraps
-import warnings
+from typing import Literal
 
 import equinox as eqx
 import jax
@@ -14,14 +15,12 @@ from flowjax.bijections import (
     BlockAutoregressiveNetwork,
     Chain,
     Coupling,
-    Flip,
     Invert,
     LeakyTanh,
     MaskedAutoregressive,
     Permute,
     Planar,
     RationalQuadraticSpline,
-    Scan,
     TriangularAffine,
     Vmap,
 )
@@ -30,10 +29,9 @@ from flowjax.utils import inv_softplus
 from flowjax.wrappers import Parameterize, WeightNormalization
 from jax.nn import relu, sigmoid, softmax, softplus, tanh
 from jax.nn.initializers import glorot_uniform
-from jaxtyping import PRNGKeyArray
 
 from ._flow_likelihood import FlowLikelihood
-from ._serialisation_utils import serialise_wrapper, BijectorWrapper
+from ._serialisation_utils import BijectorWrapper, serialise_wrapper
 
 __all__ = [
     "masked_autoregressive_flow",
@@ -85,24 +83,6 @@ def _affine_with_min_scale(min_scale: float = 1e-2) -> Affine:
     return eqx.tree_at(where=lambda aff: aff.scale, pytree=Affine(), replace=scale)
 
 
-def _add_default_permute(
-    bijection: AbstractBijection,
-    dim: int,
-    key: PRNGKeyArray,
-    permutation: jnp.array = None,
-):
-    if dim == 1:
-        return bijection
-    if dim == 2:
-        return Chain([bijection, Flip((dim,))]).merge_chains()
-
-    if permutation is None:
-        perm = Permute(jax.random.permutation(key, jnp.arange(dim)))
-    else:
-        perm = Permute(permutation)
-    return Chain([bijection, perm]).merge_chains()
-
-
 @serialise_wrapper
 def masked_autoregressive_flow(
     dim: int,
@@ -112,8 +92,7 @@ def masked_autoregressive_flow(
     nn_width: int = 50,
     nn_depth: int = 1,
     activation: str = "relu",
-    invert: bool = True,
-    permutation: list[int] = None,
+    permutation: Literal["reversed", "random"] = "reversed",
     random_seed: int = 0,
 ) -> Transformed:
     """
@@ -141,30 +120,34 @@ def masked_autoregressive_flow(
         ``Transformed``:
         _description_
     """
+    assert permutation in ["reversed", "random"], "Invalid permutation"
     key = jr.key(random_seed)
     activation = _get_activation(activation)
     transformer = transformer or _affine_with_min_scale()
     base_dist = Normal(jnp.zeros(dim))
-    if permutation is not None:
-        permutation = jnp.array(permutation)
 
-    def make_layer(key):  # masked autoregressive layer + permutation
-        bij_key, perm_key = jax.random.split(key)
-        bijection = MaskedAutoregressive(
-            key=bij_key,
-            transformer=transformer,
-            dim=dim,
-            cond_dim=cond_dim,
-            nn_width=nn_width,
-            nn_depth=nn_depth,
-            nn_activation=activation,
+    bijections = []
+    for key in jax.random.split(key, flow_layers):
+        bij_key, perm_key = jr.split(key)
+        bijections.append(
+            MaskedAutoregressive(
+                bij_key,
+                transformer=transformer,
+                dim=dim,
+                cond_dim=cond_dim,
+                nn_width=nn_width,
+                nn_depth=nn_depth,
+                nn_activation=activation,
+            )
         )
-        return _add_default_permute(bijection, dim, perm_key, permutation)
+        if dim > 1:
+            if permutation == "random":
+                bijections.append(Permute(jr.permutation(perm_key, jnp.arange(dim))))
+            else:
+                bijections.append(Permute(jnp.flip(jnp.arange(dim))))
 
-    keys = jax.random.split(key, flow_layers)
-    layers = eqx.filter_vmap(make_layer)(keys)
-    bijection = Invert(Scan(layers)) if invert else Scan(layers)
-    return Transformed(base_dist, bijection)
+    bijection = Invert(Chain(bijections[:-1]).merge_chains())  # remove last permutation
+    return Transformed(base_dist, bijection).merge_transforms()
 
 
 @serialise_wrapper
@@ -175,7 +158,7 @@ def coupling_flow(
     flow_layers: int = 8,
     nn_width: int = 50,
     activation: str = "relu",
-    permutation: list[int] = None,
+    permutation: Literal["reversed", "random"] = "reversed",
     random_seed: int = 0,
 ) -> Transformed:
     """
@@ -201,30 +184,34 @@ def coupling_flow(
         ``Transformed``:
         _description_
     """
+    assert permutation in ["reversed", "random"], "Invalid permutation"
     key = jr.key(random_seed)
     activation = _get_activation(activation)
     transformer = transformer or _affine_with_min_scale()
     base_dist = Normal(jnp.zeros(dim))
-    if permutation is not None:
-        permutation = jnp.array(permutation)
 
-    def make_layer(key):  # coupling layer + permutation
+    bijections = []
+    for key in jax.random.split(key, flow_layers):
         bij_key, perm_key = jr.split(key)
-        bijection = Coupling(
-            key=bij_key,
-            transformer=transformer,
-            untransformed_dim=dim // 2,
-            dim=dim,
-            cond_dim=cond_dim,
-            nn_width=nn_width,
-            nn_activation=activation,
+        bijections.append(
+            Coupling(
+                key=bij_key,
+                transformer=transformer,
+                untransformed_dim=dim // 2,
+                dim=dim,
+                cond_dim=cond_dim,
+                nn_width=nn_width,
+                nn_activation=activation,
+            )
         )
-        return _add_default_permute(bijection, dim, perm_key, permutation)
+        if dim > 1:
+            if permutation == "random":
+                bijections.append(Permute(jr.permutation(perm_key, jnp.arange(dim))))
+            else:
+                bijections.append(Permute(jnp.flip(jnp.arange(dim))))
 
-    keys = jr.split(key, flow_layers)
-    layers = eqx.filter_vmap(make_layer)(keys)
-    bijection = Invert(Scan(layers))
-    return Transformed(base_dist, bijection)
+    bijection = Invert(Chain(bijections[:-1]).merge_chains())  # remove last permutation
+    return Transformed(base_dist, bijection).merge_transforms()
 
 
 @serialise_wrapper
@@ -236,7 +223,7 @@ def block_neural_autoregressive_flow(
     flow_layers: int = 1,
     activation: str = "sigmoid",
     inverter: Callable = None,
-    permutation: list[int] = None,
+    permutation: Literal["reversed", "random"] = "reversed",
     random_seed: int = 0,
 ) -> Transformed:
     """
@@ -273,29 +260,33 @@ def block_neural_autoregressive_flow(
         ``Transformed``:
         _description_
     """
+    assert permutation in ["reversed", "random"], "Invalid permutation"
     key = jr.key(random_seed)
     base_dist = Normal(jnp.zeros(dim))
     activation = _get_activation(activation)
-    if permutation is not None:
-        permutation = jnp.array(permutation)
 
-    def make_layer(key):  # bnaf layer + permutation
+    bijections = []
+    for key in jax.random.split(key, flow_layers):
         bij_key, perm_key = jr.split(key)
-        bijection = BlockAutoregressiveNetwork(
-            bij_key,
-            dim=base_dist.shape[-1],
-            cond_dim=cond_dim,
-            depth=nn_depth,
-            block_dim=nn_block_dim,
-            activation=activation,
-            inverter=inverter,
+        bijections.append(
+            BlockAutoregressiveNetwork(
+                bij_key,
+                dim=base_dist.shape[-1],
+                cond_dim=cond_dim,
+                depth=nn_depth,
+                block_dim=nn_block_dim,
+                activation=activation,
+                inverter=inverter,
+            )
         )
-        return _add_default_permute(bijection, base_dist.shape[-1], perm_key, permutation)
+        if dim > 1:
+            if permutation == "random":
+                bijections.append(Permute(jr.permutation(perm_key, jnp.arange(dim))))
+            else:
+                bijections.append(Permute(jnp.flip(jnp.arange(dim))))
 
-    keys = jr.split(key, flow_layers)
-    layers = eqx.filter_vmap(make_layer)(keys)
-    bijection = Invert(Scan(layers))
-    return Transformed(base_dist, bijection)
+    bijection = Invert(Chain(bijections[:-1]).merge_chains())  # remove last permutation
+    return Transformed(base_dist, bijection).merge_transforms()
 
 
 @serialise_wrapper
@@ -304,7 +295,7 @@ def planar_flow(
     cond_dim: int = None,
     flow_layers: int = 8,
     negative_slope: float = None,
-    permutation: jnp.array = None,
+    permutation: Literal["reversed", "random"] = "reversed",
     random_seed: int = 0,
     **mlp_kwargs,
 ) -> Transformed:
@@ -327,24 +318,30 @@ def planar_flow(
         **mlp_kwargs: Keyword arguments (excluding in_size and out_size) passed to
             the MLP (equinox.nn.MLP). Ignored when cond_dim is None.
     """
+    assert permutation in ["reversed", "random"], "Invalid permutation"
     key = jr.key(random_seed)
     base_dist = Normal(jnp.zeros(dim))
 
-    def make_layer(key):  # Planar layer + permutation
+    bijections = []
+    for key in jax.random.split(key, flow_layers):
         bij_key, perm_key = jr.split(key)
-        bijection = Planar(
-            bij_key,
-            dim=base_dist.shape[-1],
-            cond_dim=cond_dim,
-            negative_slope=negative_slope,
-            **mlp_kwargs,
+        bijections.append(
+            Planar(
+                bij_key,
+                dim=base_dist.shape[-1],
+                cond_dim=cond_dim,
+                negative_slope=negative_slope,
+                **mlp_kwargs,
+            )
         )
-        return _add_default_permute(bijection, base_dist.shape[-1], perm_key, permutation)
+        if dim > 1:
+            if permutation == "random":
+                bijections.append(Permute(jr.permutation(perm_key, jnp.arange(dim))))
+            else:
+                bijections.append(Permute(jnp.flip(jnp.arange(dim))))
 
-    keys = jr.split(key, flow_layers)
-    layers = eqx.filter_vmap(make_layer)(keys)
-    bijection = Invert(Scan(layers))
-    return Transformed(base_dist, bijection)
+    bijection = Invert(Chain(bijections[:-1]).merge_chains())  # remove last permutation
+    return Transformed(base_dist, bijection).merge_transforms()
 
 
 @serialise_wrapper
@@ -354,6 +351,7 @@ def triangular_spline_flow(
     flow_layers: int = 8,
     knots: int = 8,
     tanh_max_val: float = 3.0,
+    permutation: Literal["reversed", "random"] = "reversed",
     random_seed: int = 0,
 ) -> Transformed:
     """Triangular spline flow.
@@ -376,6 +374,7 @@ def triangular_spline_flow(
         init: Initialisation method for the lower triangular weights.
             Defaults to glorot_uniform().
     """
+    assert permutation in ["reversed", "random"], "Invalid permutation"
     key = jr.key(random_seed)
     base_dist = Normal(jnp.zeros(dim))
     init = glorot_uniform()
@@ -385,7 +384,8 @@ def triangular_spline_flow(
         spline = eqx.filter_vmap(fn, axis_size=dim)()
         return Vmap(spline, in_axes=eqx.if_array(0))
 
-    def make_layer(key):
+    bijections = []
+    for key in jax.random.split(key, flow_layers):
         lt_key, perm_key, cond_key = jr.split(key, 3)
         weights = init(lt_key, (dim, dim))
         lt_weights = weights.at[jnp.diag_indices(dim)].set(1)
@@ -393,7 +393,7 @@ def triangular_spline_flow(
         tri_aff = eqx.tree_at(
             lambda t: t.triangular, tri_aff, replace_fn=WeightNormalization
         )
-        bijections = [
+        bijections += [
             LeakyTanh(tanh_max_val, (dim,)),
             get_splines(),
             Invert(LeakyTanh(tanh_max_val, (dim,))),
@@ -401,20 +401,21 @@ def triangular_spline_flow(
         ]
 
         if cond_dim is not None:
-            linear_condition = AdditiveCondition(
-                Linear(cond_dim, dim, use_bias=False, key=cond_key),
-                (dim,),
-                (cond_dim,),
+            bijections.append(
+                AdditiveCondition(
+                    Linear(cond_dim, dim, use_bias=False, key=cond_key),
+                    (dim,),
+                    (cond_dim,),
+                )
             )
-            bijections.append(linear_condition)
+        if dim > 1:
+            if permutation == "random":
+                bijections.append(Permute(jr.permutation(perm_key, jnp.arange(dim))))
+            else:
+                bijections.append(Permute(jnp.flip(jnp.arange(dim))))
 
-        bijection = Chain(bijections)
-        return _add_default_permute(bijection, dim, perm_key)
-
-    keys = jr.split(key, flow_layers)
-    layers = eqx.filter_vmap(make_layer)(keys)
-    bijection = Invert(Scan(layers))
-    return Transformed(base_dist, bijection)
+    bijection = Invert(Chain(bijections[:-1]).merge_chains())  # remove last permutation
+    return Transformed(base_dist, bijection).merge_transforms()
 
 
 _flow_registry = {
