@@ -365,6 +365,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    assert len(args.INTERVAL) <= 2, "RQS Interval should be a single value or a pair."
+
     if not os.path.isdir(args.OUTPATH):
         os.mkdir(args.OUTPATH)
 
