@@ -1,7 +1,7 @@
 import jax.random as jr
 import numpy as np
 import optax
-from flowjax.distributions import Transformed
+from flowjax.distributions import Transformed, StandardNormal
 from jax import vmap
 
 from nabu import Likelihood
@@ -31,7 +31,9 @@ class FlowLikelihood(Likelihood):
         posterior_transform: PosteriorTransform = PosteriorTransform(),
     ):
         self._metadata = metadata
-
+        assert isinstance(
+            model.base_dist, StandardNormal
+        ), "Only normal distribution as base distribution currently available."
         super().__init__(
             model=model,
             posterior_transform=posterior_transform,
