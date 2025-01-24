@@ -1,6 +1,7 @@
 import json
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from functools import partial
 from importlib.metadata import version
 from pathlib import Path
 
@@ -117,7 +118,7 @@ class Likelihood(ABC):
     def kstest_pvalue(self, test_dataset: np.ndarray) -> float:
         """Compute p-value for Kolmogorov-Smirnov test"""
         return kstest(
-            self.chi2(test_dataset), cdf=lambda x: chi2.cdf(x, df=test_dataset.shape[-1])
+            self.chi2(test_dataset), cdf=partial(chi2.cdf, df=test_dataset.shape[-1])
         ).pvalue
 
     def goodness_of_fit(
