@@ -297,9 +297,9 @@ if __name__ == "__main__":
     ansatz.add_argument(
         "--interval",
         "-int",
-        type=int,
+        type=float,
         nargs="+",
-        default=[4],
+        default=[4.0],
         help="Interval for RQS only, defaults to 4. "
         "If two value is given, will be considered as the lower and upper bounds.",
         dest="INTERVAL",
