@@ -114,9 +114,11 @@ class Likelihood(ABC):
         """Compute the cumulative density function at x shape (N,dof)"""
         return chi2.cdf(self.chi2(x), df=x.shape[-1])
 
-    def kstest_pvalue(self, x: np.ndarray) -> float:
+    def kstest_pvalue(self, test_dataset: np.ndarray) -> float:
         """Compute p-value for Kolmogorov-Smirnov test"""
-        return kstest(self.chi2(x), cdf=lambda x: chi2.cdf(x, df=x.shape[-1])).pvalue
+        return kstest(
+            self.chi2(test_dataset), cdf=lambda x: chi2.cdf(x, df=test_dataset.shape[-1])
+        ).pvalue
 
     def goodness_of_fit(
         self,
