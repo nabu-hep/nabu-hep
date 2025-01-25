@@ -65,15 +65,16 @@ class PosteriorTransform:
             }
 
             def forward(x):
-                x = np.array(x)
                 x_new = (x - mean) / scale
                 if log_axes is not None:
+                    x_new = np.array(x_new)
                     x_new[:, log_axes] = np.log(x_new[:, log_axes])
                     x_new[:, log_axes] = (x_new[:, log_axes] - log_shift) / log_scale
                 return x_new
 
             def backward(x):
                 if log_axes is not None:
+                    x = np.array(x)
                     x[:, log_axes] = x[:, log_axes] * log_scale + log_shift
                     x[:, log_axes] = np.exp(x[:, log_axes])
                 return x * scale + mean
