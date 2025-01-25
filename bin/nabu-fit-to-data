@@ -137,10 +137,10 @@ def main(args):
             ) as f:
                 yaml.safe_dump(
                     {
-                        "model_random_seed": model_random_seed,
-                        "fit_random_seed": fit_random_seed,
-                        "chi2_pval": chi2_pval,
-                        "kst_pval": kst_pval,
+                        "model_random_seed": int(model_random_seed),
+                        "fit_random_seed": int(fit_random_seed),
+                        "chi2_pval": float(chi2_pval),
+                        "kst_pval": float(kst_pval),
                     },
                     f,
                 )
