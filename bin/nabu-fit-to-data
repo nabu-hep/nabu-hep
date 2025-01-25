@@ -72,17 +72,30 @@ def main(args):
         model_random_seed = 42 if args.TEST else np.random.randint(0, high=999999999999)
         fit_random_seed = 42 if args.TEST else np.random.randint(0, high=999999999999)
 
-        llhd_constructor = get_flow("masked_autoregressive_flow")
-        likelihood: Likelihood = llhd_constructor(
-            dim=dim,
-            transformer=transformer,
-            flow_layers=args.FLOWLAYERS,
-            nn_width=args.NNWIDTH,
-            nn_depth=args.NNDEPTH,
-            activation=args.ACTIVATION,
-            permutation=args.PERMUTATION,
-            random_seed=model_random_seed,
+        llhd_constructor = get_flow(
+            {"maf": "masked_autoregressive_flow", "coupling": "coupling_flow"}[args.FLOW]
         )
+        if args.FLOW == "maf":
+            likelihood: Likelihood = llhd_constructor(
+                dim=dim,
+                transformer=transformer,
+                flow_layers=args.FLOWLAYERS,
+                nn_width=args.NNWIDTH,
+                nn_depth=args.NNDEPTH,
+                activation=args.ACTIVATION,
+                permutation=args.PERMUTATION,
+                random_seed=model_random_seed,
+            )
+        else:
+            likelihood: Likelihood = llhd_constructor(
+                dim=dim,
+                transformer=transformer,
+                flow_layers=args.FLOWLAYERS,
+                nn_width=[args.NNWIDTH] * args.NNDEPTH,
+                activation=args.ACTIVATION,
+                permutation=args.PERMUTATION,
+                random_seed=model_random_seed,
+            )
 
         scheduler = optax.exponential_decay(
             init_value=args.LR,
@@ -155,6 +168,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Search model space for proper nflow")
 
     parameters = parser.add_argument_group("Hyperparameters")
+    parameters.add_argument(
+        "--flow-type",
+        "-ft",
+        type=str,
+        default="maf",
+        choices=["maf", "coupling"],
+        help="Type of flow, defaults to maf.",
+        dest="FLOW",
+    )
     parameters.add_argument(
         "--nn-width",
         "-w",
