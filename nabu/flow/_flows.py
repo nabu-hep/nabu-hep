@@ -156,7 +156,7 @@ def coupling_flow(
     transformer: AbstractBijection = None,
     cond_dim: int = None,
     flow_layers: int = 8,
-    nn_width: int = 50,
+    nn_width: list[int] = 50,
     activation: str = "relu",
     permutation: Literal["reversed", "random"] = "reversed",
     random_seed: int = 0,
@@ -174,7 +174,7 @@ def coupling_flow(
             Bijection to be parameterised by conditioner. Defaults to affine.
         cond_dim (``int``, default ``None``): Dimension of conditioning variables.
         flow_layers (``int``, default ``8``): Number of coupling layers.
-        nn_width (``int``, default ``50``): Conditioner hidden layer size.
+        nn_width (``list[int]``, default ``50``): Conditioner hidden layer size.
         activation (``str``, default ``"relu"``): Conditioner activation function.
         permutation (``jnp.array``, default ``None``): Permutation of the features, if
             ``None`` it will be randomly shuffled.
@@ -185,6 +185,7 @@ def coupling_flow(
         _description_
     """
     assert permutation in ["reversed", "random"], "Invalid permutation"
+    nn_width = [nn_width] if isinstance(nn_width, int) else nn_width
     key = jr.key(random_seed)
     activation = _get_activation(activation)
     transformer = transformer or _affine_with_min_scale()
