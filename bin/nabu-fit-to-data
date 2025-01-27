@@ -110,10 +110,13 @@ def main(args):
         pval = min([chi2_pval, kst_pval])
         goodness_of_fit_test = pval >= args.PVALTHRES
 
-        report = f"p(χ²) = {chi2_pval:.3e}, p(KS) = {kst_pval:.3e}"
+        report = f"p(χ²) = {chi2_pval:.3g}, p(KS) = {kst_pval:.3g}"
         logger = SummaryWriter(log_name)
-        logger.text("P-values", report, step=0)
-        logger.text("Residuals", ", ".join([f"{x:.3e}" for x in hist.pull]), step=0)
+        logger.text(
+            "Report",
+            report + "<p>Residuals: " + ", ".join(f"{x:.3g}" for x in hist.pull) + "</p>",
+            step=0,
+        )
         print("   * " + report)
 
         if goodness_of_fit_test or args.TEST:
