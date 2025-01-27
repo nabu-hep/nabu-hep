@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# pylint: disable=no-member,ungrouped-imports,invalid-name,missing-function-docstring
+# pylint: disable=no-member,ungrouped-imports,invalid-name,redefined-outer-name
 
 import argparse
 import os
@@ -12,12 +12,18 @@ import optax
 import yaml
 
 from nabu import Likelihood
-from nabu.flow import RationalQuadraticSpline, available_activations, get_flow
+from nabu.flow import (
+    RationalQuadraticSpline,
+    available_activations,
+    coupling_flow,
+    masked_autoregressive_flow,
+)
 from nabu.plotting import summary_plot
 from nabu.tensorboard import SummaryWriter
 
 
-def main(args):
+def main(args: argparse.Namespace) -> None:
+    """Main function to fit the data to the model."""
     data = np.load(args.DATAPATH)
     X_train = data["X_train"]
     dim = X_train.shape[1]
@@ -32,15 +38,15 @@ def main(args):
         "Pour yourself a cup of coffee; this will take some time..."
     )
 
-    transformer = {
-        "affine": None,
-        "rqs": RationalQuadraticSpline(
+    if args.TRANS == "affine":
+        transformer = None
+    else:
+        transformer = RationalQuadraticSpline(
             knots=args.KNOTS,
             interval=args.INTERVAL[0]
             if len(args.INTERVAL) == 1
             else tuple(args.INTERVAL),
-        ),
-    }[args.TRANS]
+        )
 
     while True:
         # check if there are any completed scans
@@ -52,11 +58,8 @@ def main(args):
         model_random_seed = 42 if args.TEST else np.random.randint(0, high=999999999999)
         fit_random_seed = 42 if args.TEST else np.random.randint(0, high=999999999999)
 
-        llhd_constructor = get_flow(
-            {"maf": "masked_autoregressive_flow", "coupling": "coupling_flow"}[args.FLOW]
-        )
         if args.FLOW == "maf":
-            likelihood: Likelihood = llhd_constructor(
+            likelihood: Likelihood = masked_autoregressive_flow(
                 dim=dim,
                 transformer=transformer,
                 flow_layers=args.FLOWLAYERS,
@@ -67,7 +70,7 @@ def main(args):
                 random_seed=model_random_seed,
             )
         else:
-            likelihood: Likelihood = llhd_constructor(
+            likelihood: Likelihood = coupling_flow(
                 dim=dim,
                 transformer=transformer,
                 flow_layers=args.FLOWLAYERS,
@@ -85,6 +88,7 @@ def main(args):
             end_value=args.MINLR,
         )
 
+        # tag the results with current time and date
         log_date = datetime.now().strftime("%b%d-%H-%M-%S")
         log_name = os.path.join(args.OUTPATH, f"log/fit_{log_date}")
         _ = likelihood.fit_to_data(
@@ -109,9 +113,9 @@ def main(args):
         pval = min([chi2_pval, kst_pval])
         goodness_of_fit_test = pval >= args.PVALTHRES
 
-        report = f"p(χ²) = {chi2_pval:.3g}, p(KS) = {kst_pval:.3g}"
-        logger = SummaryWriter(log_name)
-        logger.text(
+        # Fill the tensorboard report with the results
+        report = f"p(χ²) = {chi2_pval*100:.3g}%, p(KS) = {kst_pval*100:.3g}%"
+        SummaryWriter(log_name).text(
             "Report",
             report + "<p>Residuals: " + ", ".join(f"{x:.3g}" for x in hist.pull) + "</p>",
             step=0,
