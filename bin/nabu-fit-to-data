@@ -125,7 +125,7 @@ def main(args):
         kst_pval = hist.kstest_pval
         pval = min([chi2_pval, kst_pval])
         goodness_of_fit_test = pval >= args.PVALTHRES
-        print(f"   * p(χ²) = {chi2_pval*100:.4f}%, p(KS) = {kst_pval*100:.4f}%")
+        print(f"   * p(χ²) = {chi2_pval:.3e}, p(KS) = {kst_pval:.3e}")
 
         # save only the best pval results
         if pval > best_pval or goodness_of_fit_test:
