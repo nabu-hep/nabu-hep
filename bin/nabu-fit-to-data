@@ -85,7 +85,9 @@ def main(args):
             end_value=args.MINLR,
         )
 
-        log_name = f"log/fit_{datetime.now().strftime('%b%d-%H-%M-%S')}"
+        log_name = os.path.join(
+            args.OUTPATH, f"log/fit_{datetime.now().strftime('%b%d-%H-%M-%S')}"
+        )
         history = likelihood.fit_to_data(
             dataset=X_train,
             L1_regularisation_coef=args.L1,
