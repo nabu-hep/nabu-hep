@@ -13,6 +13,7 @@ import yaml
 
 from nabu import Likelihood
 from nabu.flow import RationalQuadraticSpline, available_activations, get_flow
+from nabu.plotting import summary_plot
 from nabu.tensorboard import SummaryWriter
 
 
@@ -41,7 +42,6 @@ def main(args):
         ),
     }[args.TRANS]
 
-    best_pval = -1.0
     while True:
         # check if there are any completed scans
         # important in case of a parallel scans running at the same time
@@ -85,10 +85,9 @@ def main(args):
             end_value=args.MINLR,
         )
 
-        log_name = os.path.join(
-            args.OUTPATH, f"log/fit_{datetime.now().strftime('%b%d-%H-%M-%S')}"
-        )
-        history = likelihood.fit_to_data(
+        log_date = datetime.now().strftime("%b%d-%H-%M-%S")
+        log_name = os.path.join(args.OUTPATH, f"log/fit_{log_date}")
+        _ = likelihood.fit_to_data(
             dataset=X_train,
             L1_regularisation_coef=args.L1,
             L2_regularisation_coef=args.L2,
@@ -118,6 +117,14 @@ def main(args):
             step=0,
         )
         print("   * " + report)
+
+        if args.SUMPLT:
+            fig, _ = summary_plot(
+                likelihood=likelihood,
+                test_data=data["X_test"],
+                prob_per_bin=args.PROB,
+            )
+            fig.savefig(os.path.join(args.OUTPATH, f"summary_plot-{log_date}"))
 
         if goodness_of_fit_test or args.TEST:
             likelihood.save(os.path.join(args.OUTPATH, "model.nabu"))
@@ -364,6 +371,14 @@ if __name__ == "__main__":
         default=False,
         help="Run on the Test routine. This routine fixes the random seeds and executes the algorithm once.",
         dest="TEST",
+    )
+    execution.add_argument(
+        "--summary-plot",
+        "-sp",
+        action="store_true",
+        default=False,
+        help="Generate summary plot after the training is completed.",
+        dest="SUMPLT",
     )
 
     args = parser.parse_args()
