@@ -131,9 +131,7 @@ def main(args):
         if pval > best_pval or goodness_of_fit_test:
             best_pval = pval
             _ = summary_plot(
-                likelihood=likelihood,
-                test_data=data["X_test"],
-                bins=np.hstack([chi2.ppf(np.arange(0.0, 1.0, 0.1), df=dim), [20.0]]),
+                likelihood=likelihood, test_data=data["X_test"], prob_per_bin=0.1
             )
             plt.savefig(os.path.join(args.OUTPATH, "summary_plot"))
             plot_history(history, os.path.join(args.OUTPATH, "history.png"))

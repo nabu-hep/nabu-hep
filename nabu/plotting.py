@@ -21,7 +21,7 @@ def summary_plot(
     test_data: np.ndarray,
     weights: Sequence[float] = None,
     bins: Sequence[float] = None,
-    hist_max_value: float = 20.0,
+    hist_max_value: float = None,
     prob_per_bin: float = None,
     add_xerr: bool = False,
     confidence_level: Sequence[float] = (0.68, 0.95, 0.99),
@@ -50,7 +50,8 @@ def summary_plot(
             they will be treated equal weight.
         bins (``Sequence[float]``, default ``None``): bin edges for the historgram. If `None`
             `prob_per_bin` option will be used.
-        hist_max_value (``float``, default ``20.0``): Max value for the histogram.
+        hist_max_value (``float``): Max value for the histogram. If not indicated, will be set
+            automatically to the 99.875 percentile of the :math:`\chi^2` distribution.
         prob_per_bin (``float``, default ``None``): Probability of event occurance per bin.
         add_xerr (``bool``, default ``False``): Add errors on x-axis.
         confidence_level (``Sequence[float]``, default ``(0.68, 0.95, 0.99)``): confidence level
@@ -69,10 +70,13 @@ def summary_plot(
     else:
         deviations = likelihood.compute_inverse(test_data)
 
+    dim = deviations.shape[1]
+    hist_max_value = hist_max_value or chi2.isf(1.0 - 0.9987502694369687, df=dim)
+
     if prob_per_bin is not None:
         bins = np.hstack(
             [
-                chi2.ppf(np.arange(0.0, 1, prob_per_bin), df=deviations.shape[1]),
+                chi2.ppf(np.arange(0.0, 1.0, prob_per_bin), df=dim),
                 [hist_max_value],
             ]
         )
@@ -80,7 +84,7 @@ def summary_plot(
     chi2_test = np.sum(deviations**2, axis=1)
 
     hist = Histogram(
-        dim=deviations.shape[1],
+        dim=dim,
         bins=bins,
         max_val=hist_max_value,
         vals=chi2_test,
