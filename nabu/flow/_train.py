@@ -11,6 +11,8 @@ from jax.tree_util import tree_leaves
 from jaxtyping import Array, ArrayLike, Float, PRNGKeyArray, PyTree
 from tqdm import tqdm
 
+from nabu.tensorboard import SummaryWriter
+
 __all__ = ["get_optimizer", "fit"]
 
 
@@ -85,6 +87,7 @@ def fit(
     lr_scheduler=None,
     plot_progress: str = None,
     metrics: list[callable] = None,
+    log: str = None,
 ):
     r"""Train a PyTree (e.g. a distribution) to samples from the target.
 
@@ -148,6 +151,8 @@ def fit(
         bar_format="{l_bar}{bar:20}{r_bar}{bar:-20b}",
     )
 
+    logger = SummaryWriter(log)
+
     try:
         for epoch in loop:
             # Shuffle data
@@ -190,6 +195,8 @@ def fit(
             if lr_scheduler is not None:
                 opt_state.hyperparams["learning_rate"] = lr_scheduler(epoch + 1)
                 losses["lr"].append(float(opt_state.hyperparams["learning_rate"]))
+
+            logger.add_history(losses, epoch)
 
             loop.set_postfix({k: v[-1] for k, v in losses.items()})
             if losses["val"][-1] == min(losses["val"]):
