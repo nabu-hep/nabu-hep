@@ -7,33 +7,13 @@ from datetime import datetime
 from pathlib import Path
 
 import jax
-import matplotlib.pyplot as plt
 import numpy as np
 import optax
 import yaml
-from scipy.stats import chi2
 
 from nabu import Likelihood
 from nabu.flow import RationalQuadraticSpline, available_activations, get_flow
-from nabu.plotting import summary_plot
-
-
-def plot_history(losses: dict[str, list], name: str) -> None:
-    fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2, figsize=(9, 4))
-    ax0.plot(losses["train"], label="train")
-    ax0.plot(losses["val"], label="val")
-    ax0.legend()
-    if np.all(np.greater_equal(losses["train"], 0.0)) and np.all(
-        np.greater_equal(losses["train"], 0.0)
-    ):
-        ax0.set_yscale("log")
-    ax1.plot(losses["lr"])
-    ax1.set_yscale("log")
-    ax0.set_xlabel("Epochs")
-    ax0.set_ylabel("Loss")
-    ax1.set_xlabel("Epochs")
-    plt.savefig(name)
-    plt.close("all")
+from nabu.tensorboard import SummaryWriter
 
 
 def main(args):
@@ -105,6 +85,7 @@ def main(args):
             end_value=args.MINLR,
         )
 
+        log_name = f"log/fit_{datetime.now().strftime('%b%d-%H-%M-%S')}"
         history = likelihood.fit_to_data(
             dataset=X_train,
             L1_regularisation_coef=args.L1,
@@ -116,6 +97,7 @@ def main(args):
             max_patience=args.MAXPATIENCE,
             batch_size=args.BATCH,
             random_seed=fit_random_seed,
+            log=log_name,
         )
 
         hist = likelihood.goodness_of_fit(
@@ -125,19 +107,15 @@ def main(args):
         kst_pval = hist.kstest_pval
         pval = min([chi2_pval, kst_pval])
         goodness_of_fit_test = pval >= args.PVALTHRES
-        print(f"   * p(χ²) = {chi2_pval:.3e}, p(KS) = {kst_pval:.3e}")
 
-        # save only the best pval results
-        if pval > best_pval or goodness_of_fit_test:
-            best_pval = pval
-            _ = summary_plot(
-                likelihood=likelihood, test_data=data["X_test"], prob_per_bin=0.1
-            )
-            plt.savefig(os.path.join(args.OUTPATH, "summary_plot"))
-            plot_history(history, os.path.join(args.OUTPATH, "history.png"))
-            likelihood.save(os.path.join(args.OUTPATH, "model.nabu"))
+        report = f"p(χ²) = {chi2_pval:.3e}, p(KS) = {kst_pval:.3e}"
+        logger = SummaryWriter(log_name)
+        logger.text("P-values", report, step=0)
+        logger.text("Residuals", ", ".join([f"{x:.3e}" for x in hist.pull]), step=0)
+        print("   * " + report)
 
         if goodness_of_fit_test or args.TEST:
+            likelihood.save(os.path.join(args.OUTPATH, "model.nabu"))
             np.savez_compressed(
                 os.path.join(args.OUTPATH, "deviations.npz"),
                 deviations=likelihood.compute_inverse(data["X_test"]),
