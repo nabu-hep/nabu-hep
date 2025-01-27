@@ -1,12 +1,7 @@
 """Fill summary plot"""
 from collections.abc import Sequence
 
-try:
-    import matplotlib.pyplot as plt
-
-    # plt.rcParams.update({"text.usetex": True, "font.family": "sans-serif"})
-except ImportError as err:
-    raise NotImplementedError("Summary plot requires matplotlib") from err
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import chi2
 
@@ -60,6 +55,22 @@ def summary_plot(
     Returns:
         Matplotlib figure and two axes
     """
+    plt.rcParams.update(
+        {
+            "font.family": "Times New Roman",
+            "font.size": 20,
+            "xtick.top": True,
+            "xtick.bottom": True,
+            "xtick.direction": "in",
+            "xtick.minor.visible": True,
+            "ytick.left": True,
+            "ytick.right": True,
+            "ytick.direction": "in",
+            "ytick.minor.visible": True,
+            "errorbar.capsize": 4,
+        }
+    )
+
     assert not all(
         x is None for x in [bins, prob_per_bin]
     ), "Both `prob_per_bin` and `bins` argument can not be `None`."
