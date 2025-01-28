@@ -154,107 +154,103 @@ def fit(
     train_summary = SummaryWriter(log, "train")
     val_summary = SummaryWriter(log, "val")
 
-    try:
-        for epoch in loop:
-            # Shuffle data
-            key, *subkeys = jr.split(key, 3)
-            train_data = [jr.permutation(subkeys[0], a) for a in train_data]
-            val_data = [jr.permutation(subkeys[1], a) for a in val_data]
+    for epoch in loop:
+        # Shuffle data
+        key, *subkeys = jr.split(key, 3)
+        train_data = [jr.permutation(subkeys[0], a) for a in train_data]
+        val_data = [jr.permutation(subkeys[1], a) for a in val_data]
 
-            # Train epoch
-            batch_losses = []
-            for batch in zip(*get_batches(train_data, batch_size)):
-                key, subkey = jr.split(key)
-                params, opt_state, loss_i = step(
-                    params,
-                    static,
-                    *batch,
-                    optimizer=optimizer,
-                    opt_state=opt_state,
-                    loss_fn=loss_fn,
-                    key=subkey,
+        # Train epoch
+        batch_losses = []
+        for batch in zip(*get_batches(train_data, batch_size)):
+            key, subkey = jr.split(key)
+            params, opt_state, loss_i = step(
+                params,
+                static,
+                *batch,
+                optimizer=optimizer,
+                opt_state=opt_state,
+                loss_fn=loss_fn,
+                key=subkey,
+            )
+            batch_losses.append(loss_i)
+        losses["train"].append((sum(batch_losses) / len(batch_losses)).item())
+        train_summary.scalar("loss", losses["train"][-1], epoch)
+        for metric in metrics:
+            losses = _append_metric(
+                metric(eqx.combine(params, static), train_data[0]), losses, "train"
+            )
+
+        # Val epoch
+        batch_losses = []
+        for batch in zip(*get_batches(val_data, batch_size)):
+            key, subkey = jr.split(key)
+            loss_i = loss_fn(params, static, *batch, key=subkey)
+            batch_losses.append(loss_i)
+        losses["val"].append((sum(batch_losses) / len(batch_losses)).item())
+        val_summary.scalar("loss", losses["val"][-1], epoch)
+        for metric in metrics:
+            losses = _append_metric(
+                metric(eqx.combine(params, static), val_data[0]), losses, "val"
+            )
+
+        if lr_scheduler is not None:
+            opt_state.hyperparams["learning_rate"] = lr_scheduler(epoch + 1)
+            losses["lr"].append(float(opt_state.hyperparams["learning_rate"]))
+            train_summary.scalar("learning_rate", losses["lr"][-1], epoch)
+
+        loop.set_postfix({k: v[-1] for k, v in losses.items()})
+        if losses["val"][-1] == min(losses["val"]):
+            best_params = params
+
+        elif (
+            count_fruitless(losses["val"]) > max_patience
+            and (epoch + 1) % check_every == 0
+            and epoch > check_every
+        ):
+            loop.set_postfix_str(f"{loop.postfix} (Max patience reached)")
+            break
+        if jnp.any(jnp.isnan(jnp.array(losses["val"] + losses["train"]))) or jnp.any(
+            jnp.isinf(jnp.array(losses["val"] + losses["train"]))
+        ):
+            loop.set_postfix_str(f"{loop.postfix} (inf or nan loss)")
+            break
+
+        if plot_progress and (epoch % int(max_epochs / 10) == 0):
+            # plot the data in 2d histograms and the model in 2d histograms
+            current_dist = eqx.combine(params, static)
+            sample = current_dist.sample(jr.key(123), (100000,))
+            if train_data[0].shape[1] == 1:
+                plt.hist(
+                    train_data[0],
+                    bins=100,
+                    histtype="step",
+                    label="original",
+                    color="blue",
+                    density=True,
                 )
-                batch_losses.append(loss_i)
-            losses["train"].append((sum(batch_losses) / len(batch_losses)).item())
-            train_summary.scalar("loss", losses["train"][-1], epoch)
-            for metric in metrics:
-                losses = _append_metric(
-                    metric(eqx.combine(params, static), train_data[0]), losses, "train"
+                plt.hist(
+                    sample,
+                    bins=100,
+                    histtype="step",
+                    label="resampled",
+                    color="red",
+                    density=True,
                 )
-
-            # Val epoch
-            batch_losses = []
-            for batch in zip(*get_batches(val_data, batch_size)):
-                key, subkey = jr.split(key)
-                loss_i = loss_fn(params, static, *batch, key=subkey)
-                batch_losses.append(loss_i)
-            losses["val"].append((sum(batch_losses) / len(batch_losses)).item())
-            val_summary.scalar("loss", losses["val"][-1], epoch)
-            for metric in metrics:
-                losses = _append_metric(
-                    metric(eqx.combine(params, static), val_data[0]), losses, "val"
+                plt.legend()
+            else:
+                fig, ax = plt.subplots(
+                    train_data[0].shape[1], train_data[0].shape[1], figsize=(10, 10)
                 )
-
-            if lr_scheduler is not None:
-                opt_state.hyperparams["learning_rate"] = lr_scheduler(epoch + 1)
-                losses["lr"].append(float(opt_state.hyperparams["learning_rate"]))
-                train_summary.scalar("learning_rate", losses["lr"][-1], epoch)
-
-            loop.set_postfix({k: v[-1] for k, v in losses.items()})
-            if losses["val"][-1] == min(losses["val"]):
-                best_params = params
-
-            elif (
-                count_fruitless(losses["val"]) > max_patience
-                and (epoch + 1) % check_every == 0
-                and epoch > check_every
-            ):
-                loop.set_postfix_str(f"{loop.postfix} (Max patience reached)")
-                break
-            if jnp.any(jnp.isnan(jnp.array(losses["val"] + losses["train"]))) or jnp.any(
-                jnp.isinf(jnp.array(losses["val"] + losses["train"]))
-            ):
-                loop.set_postfix_str(f"{loop.postfix} (inf or nan loss)")
-                break
-
-            if plot_progress and (epoch % int(max_epochs / 10) == 0):
-                # plot the data in 2d histograms and the model in 2d histograms
-                current_dist = eqx.combine(params, static)
-                sample = current_dist.sample(jr.key(123), (100000,))
-                if train_data[0].shape[1] == 1:
-                    plt.hist(
-                        train_data[0],
-                        bins=100,
-                        histtype="step",
-                        label="original",
-                        color="blue",
-                        density=True,
-                    )
-                    plt.hist(
-                        sample,
-                        bins=100,
-                        histtype="step",
-                        label="resampled",
-                        color="red",
-                        density=True,
-                    )
-                    plt.legend()
-                else:
-                    fig, ax = plt.subplots(
-                        train_data[0].shape[1], train_data[0].shape[1], figsize=(10, 10)
-                    )
-                    for c1 in range(train_data[0].shape[1]):
-                        for c2 in range(train_data[0].shape[1]):
-                            if c1 <= c2:
-                                continue
-                            ax[c1, c2].hist2d(*train_data[0][:, [c1, c2]].T, bins=100)
-                            ax[c2, c1].hist2d(*sample[:, [c1, c2]].T, bins=100)
-                    fig.suptitle("Lower left: data | upper right: model")
-                train_summary.figure(f"{plot_progress}", fig, epoch)
-                plt.close(fig)
-
-    except KeyboardInterrupt:
-        print("Training interrupted by the user")
+                for c1 in range(train_data[0].shape[1]):
+                    for c2 in range(train_data[0].shape[1]):
+                        if c1 <= c2:
+                            continue
+                        ax[c1, c2].hist2d(*train_data[0][:, [c1, c2]].T, bins=100)
+                        ax[c2, c1].hist2d(*sample[:, [c1, c2]].T, bins=100)
+                fig.suptitle("Lower left: data | upper right: model")
+            train_summary.figure(f"{plot_progress}", fig, epoch)
+            plt.close(fig)
 
     params = best_params if return_best else params
     dist = eqx.combine(params, static)
