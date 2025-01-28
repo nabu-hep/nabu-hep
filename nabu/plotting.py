@@ -1,6 +1,5 @@
 """Fill summary plot"""
 from collections.abc import Sequence
-from shutil import which
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -73,8 +72,6 @@ def summary_plot(
     )
     if "Times New Roman" in get_font_names():
         plt.rcParams.update({"font.family": "Times New Roman"})
-    if which("latex"):
-        plt.rcParams.update({"text.usetex": True})
 
     assert not all(
         x is None for x in [bins, prob_per_bin]
