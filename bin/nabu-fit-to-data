@@ -10,6 +10,7 @@ import jax
 import numpy as np
 import optax
 import yaml
+from matplotlib.pyplot import close
 
 from nabu import Likelihood
 from nabu.flow import (
@@ -128,6 +129,7 @@ def main(args: argparse.Namespace) -> None:
             prob_per_bin=args.PROB,
         )
         logger.figure("Summary-plot", fig)
+        close(fig)
 
         if goodness_of_fit_test or args.TEST:
             likelihood.save(os.path.join(args.OUTPATH, "model.nabu"))
