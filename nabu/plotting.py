@@ -1,8 +1,10 @@
 """Fill summary plot"""
 from collections.abc import Sequence
+from shutil import which
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.font_manager import get_font_names
 from scipy.stats import chi2
 
 from .goodness_of_fit import Histogram
@@ -57,7 +59,6 @@ def summary_plot(
     """
     plt.rcParams.update(
         {
-            "font.family": "Times New Roman",
             "font.size": 20,
             "xtick.top": True,
             "xtick.bottom": True,
@@ -70,6 +71,10 @@ def summary_plot(
             "errorbar.capsize": 4,
         }
     )
+    if "Times New Roman" in get_font_names():
+        plt.rcParams.update({"font.family": "Times New Roman"})
+    if which("latex"):
+        plt.rcParams.update({"text.usetex": True})
 
     assert not all(
         x is None for x in [bins, prob_per_bin]
