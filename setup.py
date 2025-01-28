@@ -16,7 +16,7 @@ requirements = [
     "setuptools",
     "tqdm>=4.64.0",
     "matplotlib",
-    "tensorboard>=2.17.1",
+    "tensorboardx>=2.6",
 ]
 
 setup(
