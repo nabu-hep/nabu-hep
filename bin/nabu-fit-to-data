@@ -377,14 +377,6 @@ if __name__ == "__main__":
         help="Run on the Test routine. This routine fixes the random seeds and executes the algorithm once.",
         dest="TEST",
     )
-    execution.add_argument(
-        "--summary-plot",
-        "-sp",
-        action="store_true",
-        default=False,
-        help="Generate summary plot after the training is completed.",
-        dest="SUMPLT",
-    )
 
     args = parser.parse_args()
 
