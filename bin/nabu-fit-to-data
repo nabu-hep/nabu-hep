@@ -115,20 +115,19 @@ def main(args: argparse.Namespace) -> None:
 
         # Fill the tensorboard report with the results
         report = f"p(χ²) = {chi2_pval*100:.3g}%, p(KS) = {kst_pval*100:.3g}%"
-        SummaryWriter(log_name).text(
+        logger = SummaryWriter(log_name)
+        logger.text(
             "Report",
             report + "<p>Residuals: " + ", ".join(f"{x:.3g}" for x in hist.pull) + "</p>",
-            step=0,
         )
         print("   * " + report)
 
-        if args.SUMPLT:
-            fig, _ = summary_plot(
-                likelihood=likelihood,
-                test_data=data["X_test"],
-                prob_per_bin=args.PROB,
-            )
-            fig.savefig(os.path.join(args.OUTPATH, f"summary_plot-{log_date}"))
+        fig, _ = summary_plot(
+            likelihood=likelihood,
+            test_data=data["X_test"],
+            prob_per_bin=args.PROB,
+        )
+        logger.figure("Summary-plot", fig)
 
         if goodness_of_fit_test or args.TEST:
             likelihood.save(os.path.join(args.OUTPATH, "model.nabu"))

@@ -1,38 +1,19 @@
 import os
+import time
 
-from tensorboard.compat import tf2 as tf
+from tensorboardX import SummaryWriter as SummaryWriterX
 
 
 class SummaryWriter:
     """Summary writer for tensorboard"""
 
-    def __init__(self, log: str):
+    def __init__(self, log: str, tag: str = "summary"):
         if log is None:
             self.writer = None
         else:
-            self.writer = {
-                "summary": tf.summary.create_file_writer(log),
-                "train": tf.summary.create_file_writer(os.path.join(log, "train")),
-                "val": tf.summary.create_file_writer(os.path.join(log, "val")),
-            }
+            self.writer = SummaryWriterX(os.path.join(log, tag))
 
-    def add_history(self, history: dict[str, list[float]], step: int) -> None:
-        """
-        Add history to tensorboard
-
-        Args:
-            history (``dict[str, list[float]]``): history of the training
-            step (``int``): current step
-        """
-        if self.writer is not None:
-            with self.writer["train"].as_default():
-                tf.summary.scalar("loss", history["train"][-1], step=step)
-            with self.writer["val"].as_default():
-                tf.summary.scalar("loss", history["val"][-1], step=step)
-            with self.writer["summary"].as_default():
-                tf.summary.scalar("learning_rate", history["lr"][-1], step=step)
-
-    def scalar(self, name: str, value: float, step: int, tag: str = "summary") -> None:
+    def scalar(self, name: str, value: float, step: int = 0) -> None:
         """
         Add scalar to tensorboard
 
@@ -43,10 +24,9 @@ class SummaryWriter:
             tag (``str``, default ``"summary"``):  tag
         """
         if self.writer is not None:
-            with self.writer[tag].as_default():
-                tf.summary.scalar(name, value, step=step)
+            self.writer.add_scalar(name, value, global_step=step, walltime=time.time())
 
-    def text(self, name: str, data: str, step: int = None, tag: str = "summary") -> None:
+    def text(self, name: str, data: str, step: int = 0) -> None:
         """
         Add text to tensorboard
 
@@ -57,31 +37,22 @@ class SummaryWriter:
             tag (``str``, default ``"summary"``): tag
         """
         if self.writer is not None:
-            with self.writer[tag].as_default():
-                tf.summary.text(name, data, step=step)
+            self.writer.add_text(name, data, global_step=step, walltime=time.time())
 
-    def histogram(
-        self,
-        name: str,
-        data: list[float],
-        step: int,
-        bins: int = 30,
-        description: str = None,
-        tag: str = "summary",
-    ) -> None:
+    def figure(self, name: str, figure, step: int = 0) -> None:
         """
-        Add histogram to tensorboard
+        Add figure to tensorboard
 
         Args:
-            name (``str``): name of the histogram
-            data (``list[float]``): data
-            step (``int``): step
-            bins (``int``, default ``30``): number of bins
-            description (``str``, default ``None``): description
+            name (``str``): name of the figure
+            figure (``plt.Figure``): figure
+            step (``int``, default ``None``): step
             tag (``str``, default ``"summary"``): tag
         """
         if self.writer is not None:
-            with self.writer[tag].as_default():
-                tf.summary.histogram(
-                    name, data, step=step, buckets=bins, description=description
-                )
+            self.writer.add_figure(name, figure, global_step=step, walltime=time.time())
+
+    def close(self) -> None:
+        """Close the writer"""
+        if self.writer is not None:
+            self.writer.close()

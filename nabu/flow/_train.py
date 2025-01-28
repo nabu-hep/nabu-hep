@@ -151,7 +151,8 @@ def fit(
         bar_format="{l_bar}{bar:20}{r_bar}{bar:-20b}",
     )
 
-    logger = SummaryWriter(log)
+    train_summary = SummaryWriter(log, "train")
+    val_summary = SummaryWriter(log, "val")
 
     try:
         for epoch in loop:
@@ -175,6 +176,7 @@ def fit(
                 )
                 batch_losses.append(loss_i)
             losses["train"].append((sum(batch_losses) / len(batch_losses)).item())
+            train_summary.scalar("loss", losses["train"][-1], epoch)
             for metric in metrics:
                 losses = _append_metric(
                     metric(eqx.combine(params, static), train_data[0]), losses, "train"
@@ -187,6 +189,7 @@ def fit(
                 loss_i = loss_fn(params, static, *batch, key=subkey)
                 batch_losses.append(loss_i)
             losses["val"].append((sum(batch_losses) / len(batch_losses)).item())
+            val_summary.scalar("loss", losses["val"][-1], epoch)
             for metric in metrics:
                 losses = _append_metric(
                     metric(eqx.combine(params, static), val_data[0]), losses, "val"
@@ -195,8 +198,7 @@ def fit(
             if lr_scheduler is not None:
                 opt_state.hyperparams["learning_rate"] = lr_scheduler(epoch + 1)
                 losses["lr"].append(float(opt_state.hyperparams["learning_rate"]))
-
-            logger.add_history(losses, epoch)
+                train_summary.scalar("learning_rate", losses["lr"][-1], epoch)
 
             loop.set_postfix({k: v[-1] for k, v in losses.items()})
             if losses["val"][-1] == min(losses["val"]):
@@ -248,12 +250,14 @@ def fit(
                             ax[c1, c2].hist2d(*train_data[0][:, [c1, c2]].T, bins=100)
                             ax[c2, c1].hist2d(*sample[:, [c1, c2]].T, bins=100)
                     fig.suptitle("Lower left: data | upper right: model")
-                plt.savefig(f"{plot_progress}{epoch}.pdf")
-                plt.close()
+                train_summary.figure(f"{plot_progress}", fig, epoch)
+                plt.close(fig)
 
     except KeyboardInterrupt:
         print("Training interrupted by the user")
 
     params = best_params if return_best else params
     dist = eqx.combine(params, static)
+    train_summary.close()
+    val_summary.close()
     return dist, losses
