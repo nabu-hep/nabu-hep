@@ -150,10 +150,10 @@ def summary_plot(
     ax0.text(
         0.0,
         ymax * 1.2,
-        r"$p(\chi^2) = "
-        + rf"{hist.residuals_pvalue*100.:.1f}\%,\ "
-        + r"p({\rm KS}) = "
-        + rf"{hist.kstest_pval*100:.1f}\%"
+        r"$p({\rm KS}) = "
+        + rf"{hist.kstest_pval*100:.1f}\%,\ "
+        + r"p(\chi^2) = "
+        + rf"{hist.residuals_pvalue*100.:.1f}\%"
         + "$",
         color="darkred",
         fontsize=20,
