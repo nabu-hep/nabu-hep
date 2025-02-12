@@ -191,7 +191,7 @@ class Likelihood(ABC):
         config.update({"version": version("nabu")})
 
         with open(str(path), "wb") as f:
-            hyperparam_str = json.dumps(self.serialise(), cls=NumpyEncoder)
+            hyperparam_str = json.dumps(config, cls=NumpyEncoder)
             f.write((hyperparam_str + "\n").encode())
             eqx.tree_serialise_leaves(f, self.model)
 
