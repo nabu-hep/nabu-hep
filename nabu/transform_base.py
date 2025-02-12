@@ -169,6 +169,33 @@ class PosteriorTransform:
         return jnp.array(self._backward(y))
 
 
+def standardise_dalitz(
+    data: np.ndarray,
+    md: float = 1e-3,
+    ma: float = 1e-3,
+    mb: float = 1e-3,
+    mc: float = 1e-3,
+) -> tuple[PosteriorTransform, np.ndarray]:
+    """
+    Convert dalitz plot cartesisan coordinates, D -> A B C
+
+    Args:
+        data (``np.ndarray``): input data to be standardised
+        md (``float``): mother particle [GeV]
+        ma (``float``): daughter particle [GeV]
+        mb (``float``): daughter particle [GeV]
+        mc (``float``): daughter particle [GeV]
+
+    Returns:
+        ``tuple[PosteriorTransform, np.ndarray]``:
+        Transformer and transformed data.
+    """
+    return (
+        PosteriorTransform.from_dalitz(md, ma, mb, mc),
+        dalitz_to_square(data, md, ma, mb, mc),
+    )
+
+
 def standardise_between_zero_and_one(
     data: np.ndarray, log_axes: list[int] = None, eps: float = 1e-6
 ) -> tuple[PosteriorTransform, np.ndarray]:
@@ -230,8 +257,8 @@ def standardise_between_negone_and_one(
 def standardise_median_quantile(
     data: np.ndarray,
 ) -> tuple[PosteriorTransform, np.ndarray]:
-    """
-    _summary_
+    r"""
+    Shift and scale the data using median and :math:`1\sigma` quantile
 
     Args:
         data (``np.ndarray``): dataset with shape (N, M). N=number of data, M=number of features
@@ -253,7 +280,7 @@ def standardise_mean_std(
     data: np.ndarray,
 ) -> tuple[PosteriorTransform, np.ndarray]:
     """
-    _summary_
+    Shift and scale the data using mean and standard deviation
 
     Args:
         data (``np.ndarray``): dataset with shape (N, M). N=number of data, M=number of features

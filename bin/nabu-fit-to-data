@@ -2,9 +2,11 @@
 # pylint: disable=no-member,ungrouped-imports,invalid-name,redefined-outer-name
 
 import argparse
+import inspect
 import os
 from datetime import datetime
 from pathlib import Path
+from sys import exit
 
 import jax
 import numpy as np
@@ -12,7 +14,7 @@ import optax
 import yaml
 from matplotlib.pyplot import close
 
-from nabu import Likelihood
+from nabu import Likelihood, PosteriorTransform
 from nabu.flow import (
     RationalQuadraticSpline,
     available_activations,
@@ -21,11 +23,44 @@ from nabu.flow import (
 )
 from nabu.plotting import summary_plot
 from nabu.tensorboard import SummaryWriter
+from nabu.transform_base import (
+    standardise_between_negone_and_one,
+    standardise_between_zero_and_one,
+    standardise_dalitz,
+    standardise_mean_std,
+    standardise_median_quantile,
+)
+
+standardisation_methods = {
+    "between_negone_and_one": standardise_between_negone_and_one,
+    "between_zero_and_one": standardise_between_zero_and_one,
+    "dalitz": standardise_dalitz,
+    "mean_std": standardise_mean_std,
+    "median_quantile": standardise_median_quantile,
+}
 
 
 def main(args: argparse.Namespace) -> None:
     """Main function to fit the data to the model."""
     data = np.load(args.DATAPATH)
+
+    p_trans = PosteriorTransform()
+    if args.STDCONFIG is not None:
+        with open(args.STDCONFIG, "r") as f:
+            std_conf = yaml.safe_load(f)
+        p_trans, new_data = standardisation_methods[std_conf["method"]](
+            data["dataset"], **std_conf["keywordargs"]
+        )
+        np.random.shuffle(new_data)
+        data = {}
+        data["X_train"], data["X_test"] = np.split(
+            new_data, [int(data.shape[0] * std_conf["train_frac"])]
+        )
+        np.savez_compressed(
+            os.path.join(str(Path(args.STDCONFIG).parent), "standardised_dataset.npz"),
+            **data,
+        )
+
     X_train = data["X_train"]
     dim = X_train.shape[1]
     if 0.0 < args.DATAFRAC < 1.0:
@@ -122,6 +157,7 @@ def main(args: argparse.Namespace) -> None:
             report + "<p>Residuals: " + ", ".join(f"{x:.3g}" for x in hist.pull) + "</p>",
         )
         print("   * " + report)
+        print(f"   * Log recorded in: {log_name}")
 
         fig, _ = summary_plot(
             likelihood=likelihood,
@@ -132,6 +168,7 @@ def main(args: argparse.Namespace) -> None:
         close(fig)
 
         if goodness_of_fit_test or args.TEST:
+            likelihood.transform = p_trans
             likelihood.save(os.path.join(args.OUTPATH, "model.nabu"))
             np.savez_compressed(
                 os.path.join(args.OUTPATH, "deviations.npz"),
@@ -331,9 +368,10 @@ if __name__ == "__main__":
         "File should include 'X_train` and `X_test` keyword arguments."
         "Use the following to save your dataset `np.savez_compressed('my_dataset.npz', X_train=X_train, X_test=X_test)`. "
         "Notice that `X_train` corresponds to the samples that will be used for training and "
-        "`X_test` corresponds to the data that will be used for testing.",
+        "`X_test` corresponds to the data that will be used for testing. If --standardisation-config is used"
+        "data set is expected to be in `dataset` keyword within compressed numpy file.",
         dest="DATAPATH",
-        required=True,
+        default="__no-file__.npz",
     )
     dataset.add_argument(
         "--train-frac",
@@ -342,6 +380,22 @@ if __name__ == "__main__":
         default=1.0,
         help="Fraction of the data to be used as the training set.",
         dest="DATAFRAC",
+    )
+    dataset.add_argument(
+        "--write-configuration",
+        type=str,
+        default=None,
+        choices=list(standardisation_methods.keys()),
+        help="Write configuration file for the given standardisation method and exit.",
+        dest="WRITESTDCONF",
+    )
+    dataset.add_argument(
+        "--standardisation-config",
+        "-sconf",
+        type=str,
+        default=None,
+        help="Use standardisation configuration to standardise the data before training.",
+        dest="STDCONFIG",
     )
 
     paths = parser.add_argument_group("Paths")
@@ -374,11 +428,23 @@ if __name__ == "__main__":
         "-test",
         action="store_true",
         default=False,
-        help="Run on the Test routine. This routine fixes the random seeds and executes the algorithm once.",
+        help="Run on the Test routine. This routine fixes the random "
+        "seeds and executes the algorithm once.",
         dest="TEST",
     )
 
     args = parser.parse_args()
+
+    if args.WRITESTDCONF is not None:
+        conf = inspect.getfullargspec(standardisation_methods[args.WRITESTDCONF])
+        configuration = {"method": args.WRITESTDCONF, "train_frac": 0.8}
+        if len(conf.args) > 1:
+            configuration.update({"keywordargs": dict(zip(conf.args[1:], conf.defaults))})
+        with open(
+            os.path.join(os.getcwd(), "standardisation.yaml"), "w", encoding="utf-8"
+        ) as f:
+            yaml.safe_dump(configuration, f)
+        exit(0)
 
     assert len(args.INTERVAL) <= 2, "RQS Interval should be a single value or a pair."
 
