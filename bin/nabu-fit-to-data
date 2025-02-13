@@ -48,8 +48,12 @@ def main(args: argparse.Namespace) -> None:
     if args.STDCONFIG is not None:
         with open(args.STDCONFIG, "r") as f:
             std_conf = yaml.safe_load(f)
+        new_data = data["dataset"]
+        assert (
+            len(new_data.shape) == 2
+        ), f"Invalid dimensionality, expected 2 got {len(new_data.shape)}"
         p_trans, new_data = standardisation_methods[std_conf["method"]](
-            data["dataset"], **std_conf["keywordargs"]
+            new_data, **std_conf["keywordargs"]
         )
         np.random.shuffle(new_data)
         data = {}
