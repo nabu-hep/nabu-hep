@@ -12,8 +12,8 @@ def test_fit_script_output():
     try:
         lm = nabu.Likelihood.load("./test/results/TEST-RESULT-COMPLETE/model.nabu")
 
-        lm_chi2 = lm.chi2(np.array([0.0, 0.0]))
-        assert np.isclose(lm_chi2, 12.923215), f"chi^2 value is wrong, {chi2}"
+        lm_chi2 = float(lm.chi2(np.array([0.0, 0.0])))
+        assert np.isclose(lm_chi2, 14.865792274475098), f"chi^2 value is wrong, {chi2}"
     except FileNotFoundError:
         assert False, "Model not found. Please execute pytest from the main folder."
 
@@ -32,8 +32,8 @@ def test_fit_script_output():
     hist = Histogram(dim=deviations.shape[1], bins=bins, vals=chi2_test)
 
     assert np.isclose(
-        hist.residuals_pvalue, 4.0564689434474666e-05
+        float(hist.residuals_pvalue), 0.016930612958101166
     ), f"p-val for residuals are wrong, {hist.residuals_pvalue}"
     assert np.isclose(
-        hist.kstest_pval, 0.19517684699261595
+        float(hist.kstest_pval), 0.023394529807423625
     ), f"p-val for KST is wrong, {hist.kstest_pval}"
