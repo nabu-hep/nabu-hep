@@ -4,9 +4,9 @@
 import argparse
 import inspect
 import os
+import sys
 from datetime import datetime
 from pathlib import Path
-from sys import exit
 
 import jax
 import numpy as np
@@ -46,9 +46,14 @@ def main(args: argparse.Namespace) -> None:
 
     p_trans = PosteriorTransform()
     if args.STDCONFIG is not None:
-        with open(args.STDCONFIG, "r") as f:
+        with open(args.STDCONFIG, "r", encoding="utf-8") as f:
             std_conf = yaml.safe_load(f)
-        new_data = data["dataset"]
+        try:
+            new_data = data["dataset"]
+        except KeyError as exc:
+            raise KeyError(
+                "Compressed NumPy file is expected to have the dataset under `dataset` keyword."
+            ) from exc
         assert (
             len(new_data.shape) == 2
         ), f"Invalid dimensionality, expected 2 got {len(new_data.shape)}"
@@ -57,6 +62,7 @@ def main(args: argparse.Namespace) -> None:
         )
         np.random.shuffle(new_data)
         data = {}
+        # pylint: disable=unbalanced-tuple-unpacking
         data["X_train"], data["X_test"] = np.split(
             new_data, [int(data.shape[0] * std_conf["train_frac"])]
         )
@@ -448,7 +454,7 @@ if __name__ == "__main__":
             os.path.join(os.getcwd(), "standardisation.yaml"), "w", encoding="utf-8"
         ) as f:
             yaml.safe_dump(configuration, f)
-        exit(0)
+        sys.exit(0)
 
     assert len(args.INTERVAL) <= 2, "RQS Interval should be a single value or a pair."
 
