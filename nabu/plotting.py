@@ -1,13 +1,9 @@
 """Fill summary plot"""
 from collections.abc import Sequence
 
-try:
-    import matplotlib.pyplot as plt
-
-    # plt.rcParams.update({"text.usetex": True, "font.family": "sans-serif"})
-except ImportError as err:
-    raise NotImplementedError("Summary plot requires matplotlib") from err
+import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.font_manager import get_font_names
 from scipy.stats import chi2
 
 from .goodness_of_fit import Histogram
@@ -21,7 +17,7 @@ def summary_plot(
     test_data: np.ndarray,
     weights: Sequence[float] = None,
     bins: Sequence[float] = None,
-    hist_max_value: float = 20.0,
+    hist_max_value: float = None,
     prob_per_bin: float = None,
     add_xerr: bool = False,
     confidence_level: Sequence[float] = (0.68, 0.95, 0.99),
@@ -50,7 +46,8 @@ def summary_plot(
             they will be treated equal weight.
         bins (``Sequence[float]``, default ``None``): bin edges for the historgram. If `None`
             `prob_per_bin` option will be used.
-        hist_max_value (``float``, default ``20.0``): Max value for the histogram.
+        hist_max_value (``float``): Max value for the histogram. If not indicated, will be set
+            automatically to the 99.875 percentile of the :math:`\chi^2` distribution.
         prob_per_bin (``float``, default ``None``): Probability of event occurance per bin.
         add_xerr (``bool``, default ``False``): Add errors on x-axis.
         confidence_level (``Sequence[float]``, default ``(0.68, 0.95, 0.99)``): confidence level
@@ -59,6 +56,23 @@ def summary_plot(
     Returns:
         Matplotlib figure and two axes
     """
+    plt.rcParams.update(
+        {
+            "font.size": 20,
+            "xtick.top": True,
+            "xtick.bottom": True,
+            "xtick.direction": "in",
+            "xtick.minor.visible": True,
+            "ytick.left": True,
+            "ytick.right": True,
+            "ytick.direction": "in",
+            "ytick.minor.visible": True,
+            "errorbar.capsize": 4,
+        }
+    )
+    if "Times New Roman" in get_font_names():
+        plt.rcParams.update({"font.family": "Times New Roman"})
+
     assert not all(
         x is None for x in [bins, prob_per_bin]
     ), "Both `prob_per_bin` and `bins` argument can not be `None`."
@@ -69,10 +83,13 @@ def summary_plot(
     else:
         deviations = likelihood.compute_inverse(test_data)
 
+    dim = deviations.shape[1]
+    hist_max_value = hist_max_value or chi2.isf(1.0 - 0.9987502694369687, df=dim)
+
     if prob_per_bin is not None:
         bins = np.hstack(
             [
-                chi2.ppf(np.arange(0.0, 1, prob_per_bin), df=deviations.shape[1]),
+                chi2.ppf(np.arange(0.0, 1.0, prob_per_bin), df=dim),
                 [hist_max_value],
             ]
         )
@@ -80,21 +97,15 @@ def summary_plot(
     chi2_test = np.sum(deviations**2, axis=1)
 
     hist = Histogram(
-        dim=deviations.shape[1],
+        dim=dim,
         bins=bins,
         max_val=hist_max_value,
         vals=chi2_test,
         weights=weights,
     )
 
-    hist_pval_test = Histogram(
-        dim=deviations.shape[1],
-        bins=chi2.ppf(np.arange(0.0, 1.1, 0.1), df=deviations.shape[1]),
-        vals=chi2_test,
-    )
-
-    x = np.linspace(0, hist.max_val, 500)
-    chi2p = chi2.pdf(x, df=hist.dim)
+    beta = np.linspace(0, hist.max_val, 500)
+    chi2p = chi2.pdf(beta, df=hist.dim)
 
     fig = plt.figure()
     size = fig.get_size_inches()
@@ -128,7 +139,7 @@ def summary_plot(
     ax1.set_ylabel(r"${\rm Residuals}$")
 
     ax0.plot(
-        x, chi2p, color="tab:blue", label=r"$\chi^2({\rm DoF}= " + f"{hist.dim}" + ")$"
+        beta, chi2p, color="tab:blue", label=r"$\chi^2({\rm DoF}= " + f"{hist.dim}" + ")$"
     )
     ax0.legend(fontsize=16)
     ymin, ymax = ax0.get_ylim()
@@ -139,10 +150,10 @@ def summary_plot(
     ax0.text(
         0.0,
         ymax * 1.2,
-        r"$p(\chi^2) = "
-        + rf"{hist_pval_test.residuals_pvalue*100.:.1f}\%,\ "
-        + r"p({\rm KS}) = "
-        + rf"{hist_pval_test.kstest_pval*100:.1f}\%"
+        r"$p({\rm KS}) = "
+        + rf"{hist.kstest_pval*100:.1f}\%,\ "
+        + r"p(\chi^2) = "
+        + rf"{hist.residuals_pvalue*100.:.1f}\%"
         + "$",
         color="darkred",
         fontsize=20,

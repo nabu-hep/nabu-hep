@@ -1,7 +1,7 @@
 import jax.random as jr
 import numpy as np
 import optax
-from flowjax.distributions import Transformed
+from flowjax.distributions import Transformed, StandardNormal
 from jax import vmap
 
 from nabu import Likelihood
@@ -31,7 +31,9 @@ class FlowLikelihood(Likelihood):
         posterior_transform: PosteriorTransform = PosteriorTransform(),
     ):
         self._metadata = metadata
-
+        assert isinstance(
+            model.base_dist, StandardNormal
+        ), "Only normal distribution as base distribution currently available."
         super().__init__(
             model=model,
             posterior_transform=posterior_transform,
@@ -62,6 +64,8 @@ class FlowLikelihood(Likelihood):
     def fit_to_data(
         self,
         dataset: np.ndarray,
+        L1_regularisation_coef: float = 0.0,
+        L2_regularisation_coef: float = 0.0,
         condition: np.ndarray = None,
         learning_rate: float = 1e-4,
         optimizer: str = "adam",
@@ -74,6 +78,8 @@ class FlowLikelihood(Likelihood):
         verbose: bool = True,
         random_seed: int = np.random.randint(0, high=999999999999),
         plot_progress: str = None,
+        metrics: list[callable] = None,
+        log: str = None,
     ) -> dict[str, list[float]]:
         """
         Fit likelihood to the data
@@ -104,6 +110,8 @@ class FlowLikelihood(Likelihood):
             key=jr.key(random_seed),
             dist=self.model,
             x=self.transform.backward(dataset),
+            L1_regularisation_coef=L1_regularisation_coef,
+            L2_regularisation_coef=L2_regularisation_coef,
             condition=condition,
             optimizer=optimizer,
             max_epochs=max_epochs,
@@ -114,6 +122,8 @@ class FlowLikelihood(Likelihood):
             show_progress=verbose,
             check_every=check_every,
             plot_progress=plot_progress,
+            metrics=metrics,
+            log=log,
         )
-        self.model = flow
+        self._model = flow
         return history

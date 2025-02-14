@@ -1,6 +1,7 @@
 import json
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from functools import partial
 from importlib.metadata import version
 from pathlib import Path
 
@@ -9,7 +10,7 @@ import jax.numpy as jnp
 import jax.random as jr
 import numpy as np
 from jax.tree_util import tree_structure
-from scipy.stats import chi2
+from scipy.stats import chi2, kstest
 
 from .goodness_of_fit import Histogram
 
@@ -96,28 +97,51 @@ class Likelihood(ABC):
         """Compute log-probability"""
         return np.array(self.model.log_prob(self.transform.backward(x)))
 
+    def chi2(self, x: np.ndarray) -> np.ndarray:
+        """
+        Compute chi^2 for
+
+        Args:
+            x (``np.ndarray``): input data
+
+        Returns:
+            ``np.ndarray``:
+            chi2 for given x. shape (N,dof)
+        """
+        x = np.expand_dims(x, 0) if len(x.shape) == 1 else x
+        return np.sum(self.compute_inverse(x) ** 2, axis=1)
+
+    def cdf(self, x: np.ndarray) -> np.ndarray:
+        """Compute the cumulative density function at x shape (N,dof)"""
+        return chi2.cdf(self.chi2(x), df=x.shape[-1])
+
+    def kstest_pvalue(self, test_dataset: np.ndarray) -> float:
+        """Compute p-value for Kolmogorov-Smirnov test"""
+        return kstest(
+            self.chi2(test_dataset), cdf=partial(chi2.cdf, df=test_dataset.shape[-1])
+        ).pvalue
+
     def goodness_of_fit(
         self,
         test_dataset: np.ndarray,
         prob_per_bin: float = 0.1,
     ) -> Histogram:
         """
-        _summary_
+        Construct binned and unbinned goodness of fit test.
 
         Args:
-            test_dataset (``np.ndarray``): _description_
-            prob_per_bin (``float``, default ``0.1``): _description_
+            test_dataset (``np.ndarray``): test dataset, shape `(N, DoF)`
+            prob_per_bin (``float``, default ``0.1``): probability of yields in each bin
 
         Returns:
             ``Histogram``:
-            _description_
+            Goodness of fit base
         """
         dim = test_dataset.shape[-1]
-        deviations = self.compute_inverse(test_dataset)
         bins = chi2.ppf(
             np.linspace(0.0, 1.0, int(np.ceil(1.0 / prob_per_bin)) + 1), df=dim
         )
-        return Histogram(dim=dim, bins=bins, vals=np.sum(deviations**2, axis=1))
+        return Histogram(dim=dim, bins=bins, vals=self.chi2(test_dataset))
 
     def is_valid(self, test_data: np.ndarray, threshold: float = 0.03) -> bool:
         """
@@ -140,11 +164,11 @@ class Likelihood(ABC):
 
     def serialise(self) -> dict:
         """
-        _summary_
+        Serialise the underlying model
 
         Returns:
             ``dict``:
-            _description_
+            Description of the model
         """
         assert self.model_type != "base", "Invalid model type"
         return {
@@ -164,10 +188,10 @@ class Likelihood(ABC):
         if path.suffix != ".nabu":
             path = path.with_suffix(".nabu")
         config = self.serialise()
-        config.update({"version": version("nabu")})
+        config.update({"version": version("nabu-hep")})
 
         with open(str(path), "wb") as f:
-            hyperparam_str = json.dumps(self.serialise())
+            hyperparam_str = json.dumps(config, cls=NumpyEncoder)
             f.write((hyperparam_str + "\n").encode())
             eqx.tree_serialise_leaves(f, self.model)
 
@@ -221,3 +245,44 @@ class Likelihood(ABC):
                 likelihood.transform = PosteriorTransform()
 
         return likelihood
+
+
+class NumpyEncoder(json.JSONEncoder):
+    """Custom encoder for numpy data types"""
+
+    def default(self, obj):
+        if isinstance(
+            obj,
+            (
+                np.int_,
+                np.intc,
+                np.intp,
+                np.int8,
+                np.int16,
+                np.int32,
+                np.int64,
+                np.uint8,
+                np.uint16,
+                np.uint32,
+                np.uint64,
+            ),
+        ):
+
+            return int(obj)
+
+        elif isinstance(obj, (np.float_, np.float16, np.float32, np.float64)):
+            return float(obj)
+
+        elif isinstance(obj, (np.complex_, np.complex64, np.complex128)):
+            return {"real": obj.real, "imag": obj.imag}
+
+        elif isinstance(obj, (np.ndarray,)):
+            return obj.tolist()
+
+        elif isinstance(obj, (np.bool_)):
+            return bool(obj)
+
+        elif isinstance(obj, (np.void)):
+            return None
+
+        return json.JSONEncoder.default(self, obj)

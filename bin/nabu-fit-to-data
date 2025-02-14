@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-# pylint: disable=no-member,ungrouped-imports,invalid-name
+# pylint: disable=no-member,ungrouped-imports,invalid-name,redefined-outer-name
 
 import argparse
+import inspect
 import os
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -10,55 +12,88 @@ import jax
 import numpy as np
 import optax
 import yaml
-from scipy.stats import chi2
+from matplotlib.pyplot import close
 
-from nabu import Likelihood
-from nabu.flow import RationalQuadraticSpline, available_activations, get_flow
+from nabu import Likelihood, PosteriorTransform
+from nabu.flow import (
+    RationalQuadraticSpline,
+    available_activations,
+    coupling_flow,
+    masked_autoregressive_flow,
+)
+from nabu.plotting import summary_plot
+from nabu.tensorboard import SummaryWriter
+from nabu.transform_base import (
+    standardise_between_negone_and_one,
+    standardise_between_zero_and_one,
+    standardise_dalitz,
+    standardise_mean_std,
+    standardise_median_quantile,
+)
 
-try:
-    import matplotlib.pyplot as plt
-
-    from nabu.plotting import summary_plot
-
-    def plot_history(losses: dict[str, list], name: str) -> None:
-        fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2, figsize=(9, 4))
-        ax0.plot(losses["train"], label="train")
-        ax0.plot(losses["val"], label="val")
-        ax0.legend()
-        if np.all(np.greater_equal(losses["train"], 0.0)) and np.all(
-            np.greater_equal(losses["train"], 0.0)
-        ):
-            ax0.set_yscale("log")
-        ax1.plot(losses["lr"])
-        ax1.set_yscale("log")
-        plt.savefig(name)
-        plt.close("all")
-
-except NotImplementedError:
-    summary_plot = None
-    plot_history = None
-    print("  -> Warning: Plotting is not available")
+standardisation_methods = {
+    "between_negone_and_one": standardise_between_negone_and_one,
+    "between_zero_and_one": standardise_between_zero_and_one,
+    "dalitz": standardise_dalitz,
+    "mean_std": standardise_mean_std,
+    "median_quantile": standardise_median_quantile,
+}
 
 
-def main(args):
+def main(args: argparse.Namespace) -> None:
+    """Main function to fit the data to the model."""
     data = np.load(args.DATAPATH)
+
+    p_trans = PosteriorTransform()
+    if args.STDCONFIG is not None:
+        with open(args.STDCONFIG, "r", encoding="utf-8") as f:
+            std_conf = yaml.safe_load(f)
+        try:
+            new_data = data["dataset"]
+        except KeyError as exc:
+            raise KeyError(
+                "Compressed NumPy file is expected to have the dataset under `dataset` keyword."
+            ) from exc
+        assert (
+            len(new_data.shape) == 2
+        ), f"Invalid dimensionality, expected 2 got {len(new_data.shape)}"
+        p_trans, new_data = standardisation_methods[std_conf["method"]](
+            new_data, **std_conf["keywordargs"]
+        )
+        np.random.shuffle(new_data)
+        data = {}
+        # pylint: disable=unbalanced-tuple-unpacking
+        data["X_train"], data["X_test"] = np.split(
+            new_data, [int(data.shape[0] * std_conf["train_frac"])]
+        )
+        np.savez_compressed(
+            os.path.join(str(Path(args.STDCONFIG).parent), "standardised_dataset.npz"),
+            **data,
+        )
+
     X_train = data["X_train"]
     dim = X_train.shape[1]
     if 0.0 < args.DATAFRAC < 1.0:
-        choose = np.arange(0, int(X_train.shape[0] * args.DATAFRAC))
-        np.random.shuffle(choose)
-        X_train = X_train[choose]
+        X_train = X_train[
+            np.random.choice(
+                np.arange(X_train.shape[0]), size=int(X_train.shape[0] * args.DATAFRAC)
+            )
+        ]
     print(
-        f"Training for {X_train.shape[0]} samples. "
+        f"Training for {X_train.shape[0]}, {dim}D samples. "
         "Pour yourself a cup of coffee; this will take some time..."
     )
 
-    transformer = {
-        "affine": None,
-        "rqs": RationalQuadraticSpline(knots=args.KNOTS, interval=args.INTERVAL),
-    }[args.TRANS]
+    if args.TRANS == "affine":
+        transformer = None
+    else:
+        transformer = RationalQuadraticSpline(
+            knots=args.KNOTS,
+            interval=args.INTERVAL[0]
+            if len(args.INTERVAL) == 1
+            else tuple(args.INTERVAL),
+        )
 
-    best_pval = -1.0
     while True:
         # check if there are any completed scans
         # important in case of a parallel scans running at the same time
@@ -66,17 +101,30 @@ def main(args):
             print("Found a completed scan.")
             break
 
-        llhd_constructor = get_flow("masked_autoregressive_flow")
-        likelihood: Likelihood = llhd_constructor(
-            dim=dim,
-            transformer=transformer,
-            flow_layers=args.FLOWLAYERS,
-            nn_width=args.NNWIDTH,
-            nn_depth=args.NNDEPTH,
-            activation=args.ACTIVATION,
-            permutation=list(reversed(range(dim))),
-            random_seed=42 if args.TEST else np.random.randint(0, high=999999999999),
-        )
+        model_random_seed = 42 if args.TEST else np.random.randint(0, high=999999999999)
+        fit_random_seed = 42 if args.TEST else np.random.randint(0, high=999999999999)
+
+        if args.FLOW == "maf":
+            likelihood: Likelihood = masked_autoregressive_flow(
+                dim=dim,
+                transformer=transformer,
+                flow_layers=args.FLOWLAYERS,
+                nn_width=args.NNWIDTH,
+                nn_depth=args.NNDEPTH,
+                activation=args.ACTIVATION,
+                permutation=args.PERMUTATION,
+                random_seed=model_random_seed,
+            )
+        else:
+            likelihood: Likelihood = coupling_flow(
+                dim=dim,
+                transformer=transformer,
+                flow_layers=args.FLOWLAYERS,
+                nn_width=[args.NNWIDTH] * args.NNDEPTH,
+                activation=args.ACTIVATION,
+                permutation=args.PERMUTATION,
+                random_seed=model_random_seed,
+            )
 
         scheduler = optax.exponential_decay(
             init_value=args.LR,
@@ -86,15 +134,21 @@ def main(args):
             end_value=args.MINLR,
         )
 
-        history = likelihood.fit_to_data(
+        # tag the results with current time and date
+        log_date = datetime.now().strftime("%b%d-%H-%M-%S")
+        log_name = os.path.join(args.OUTPATH, f"log/fit_{log_date}")
+        _ = likelihood.fit_to_data(
             dataset=X_train,
+            L1_regularisation_coef=args.L1,
+            L2_regularisation_coef=args.L2,
             learning_rate=args.LR,
             optimizer="adam",
             lr_scheduler=scheduler,
             max_epochs=args.EPOCHS,
             max_patience=args.MAXPATIENCE,
             batch_size=args.BATCH,
-            random_seed=42 if args.TEST else np.random.randint(0, high=999999999999),
+            random_seed=fit_random_seed,
+            log=log_name,
         )
 
         hist = likelihood.goodness_of_fit(
@@ -103,31 +157,50 @@ def main(args):
         chi2_pval = hist.residuals_pvalue
         kst_pval = hist.kstest_pval
         pval = min([chi2_pval, kst_pval])
-        goodness_of_fit_test = all(
-            np.greater_equal([chi2_pval, kst_pval], args.PVALTHRES)
-        )
-        print(f"   * p(χ²) = {chi2_pval*100:.4f}%, p(KS) = {kst_pval*100:.4f}%")
+        goodness_of_fit_test = pval >= args.PVALTHRES
 
-        # save only the best pval results
-        if pval > best_pval or goodness_of_fit_test:
-            best_pval = pval
-            if summary_plot is not None:
-                _ = summary_plot(
-                    likelihood=likelihood,
-                    test_data=data["X_test"],
-                    bins=np.hstack([chi2.ppf(np.arange(0.0, 1.0, 0.1), df=dim), [20.0]]),
-                )
-                plt.savefig(os.path.join(args.OUTPATH, "summary_plot"))
-                plot_history(history, os.path.join(args.OUTPATH, "history.png"))
-            likelihood.save(os.path.join(args.OUTPATH, "model.nabu"))
+        # Fill the tensorboard report with the results
+        report = f"p(χ²) = {chi2_pval*100:.3g}%, p(KS) = {kst_pval*100:.3g}%"
+        logger = SummaryWriter(log_name)
+        logger.text(
+            "Report",
+            report + "<p>Residuals: " + ", ".join(f"{x:.3g}" for x in hist.pull) + "</p>",
+        )
+        print("   * " + report)
+        print(f"   * Log recorded in: {log_name}")
+
+        fig, _ = summary_plot(
+            likelihood=likelihood,
+            test_data=data["X_test"],
+            prob_per_bin=args.PROB,
+        )
+        logger.figure("Summary-plot", fig)
+        close(fig)
 
         if goodness_of_fit_test or args.TEST:
+            likelihood.transform = p_trans
+            likelihood.save(os.path.join(args.OUTPATH, "model.nabu"))
             np.savez_compressed(
                 os.path.join(args.OUTPATH, "deviations.npz"),
                 deviations=likelihood.compute_inverse(data["X_test"]),
             )
+            # Save random seeds
+            with open(
+                os.path.join(args.OUTPATH, "config.yaml"), "a", encoding="utf-8"
+            ) as f:
+                yaml.safe_dump(
+                    {
+                        "model_random_seed": int(model_random_seed),
+                        "fit_random_seed": int(fit_random_seed),
+                        "chi2_pval": float(chi2_pval),
+                        "kst_pval": float(kst_pval),
+                    },
+                    f,
+                )
             os.rename(args.OUTPATH, args.OUTPATH + "-COMPLETE")
+            args.OUTPATH += "-COMPLETE"
             break
+    print(" * Files are saved in", args.OUTPATH)
 
 
 if __name__ == "__main__":
@@ -135,6 +208,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Search model space for proper nflow")
 
     parameters = parser.add_argument_group("Hyperparameters")
+    parameters.add_argument(
+        "--flow-type",
+        "-ft",
+        type=str,
+        default="maf",
+        choices=["maf", "coupling"],
+        help="Type of flow, defaults to maf.",
+        dest="FLOW",
+    )
     parameters.add_argument(
         "--nn-width",
         "-w",
@@ -169,10 +251,35 @@ if __name__ == "__main__":
         dest="ACTIVATION",
     )
     parameters.add_argument(
+        "--permutation",
+        "-perm",
+        type=str,
+        default="reversed",
+        choices=["reversed", "random"],
+        help="Permutation for the flow, defaults to reversed.",
+        dest="PERMUTATION",
+    )
+    parameters.add_argument(
         "-lr", type=float, default=1e-3, help="learning rate", dest="LR"
     )
     parameters.add_argument(
         "-mlr", type=float, default=1e-4, help="minlearning rate", dest="MINLR"
+    )
+    parameters.add_argument(
+        "--l1-regularisation",
+        "-l1",
+        type=float,
+        default=0.0,
+        help="L1 Regularisation coefficient, defaults to 0.",
+        dest="L1",
+    )
+    parameters.add_argument(
+        "--l2-regularisation",
+        "-l2",
+        type=float,
+        default=0.0,
+        help="L2 Regularisation coefficient, defaults to 0.",
+        dest="L2",
     )
     parameters.add_argument(
         "--max-patience",
@@ -254,9 +361,11 @@ if __name__ == "__main__":
     ansatz.add_argument(
         "--interval",
         "-int",
-        type=int,
-        default=4,
-        help="Interval for RQS only, defaults to 4",
+        type=float,
+        nargs="+",
+        default=[4.0],
+        help="Interval for RQS only, defaults to 4. "
+        "If two value is given, will be considered as the lower and upper bounds.",
         dest="INTERVAL",
     )
 
@@ -269,9 +378,10 @@ if __name__ == "__main__":
         "File should include 'X_train` and `X_test` keyword arguments."
         "Use the following to save your dataset `np.savez_compressed('my_dataset.npz', X_train=X_train, X_test=X_test)`. "
         "Notice that `X_train` corresponds to the samples that will be used for training and "
-        "`X_test` corresponds to the data that will be used for testing.",
+        "`X_test` corresponds to the data that will be used for testing. If --standardisation-config is used"
+        "data set is expected to be in `dataset` keyword within compressed numpy file.",
         dest="DATAPATH",
-        required=True,
+        default="__no-file__.npz",
     )
     dataset.add_argument(
         "--train-frac",
@@ -280,6 +390,22 @@ if __name__ == "__main__":
         default=1.0,
         help="Fraction of the data to be used as the training set.",
         dest="DATAFRAC",
+    )
+    dataset.add_argument(
+        "--write-configuration",
+        type=str,
+        default=None,
+        choices=list(standardisation_methods.keys()),
+        help="Write configuration file for the given standardisation method and exit.",
+        dest="WRITESTDCONF",
+    )
+    dataset.add_argument(
+        "--standardisation-config",
+        "-sconf",
+        type=str,
+        default=None,
+        help="Use standardisation configuration to standardise the data before training.",
+        dest="STDCONFIG",
     )
 
     paths = parser.add_argument_group("Paths")
@@ -312,11 +438,25 @@ if __name__ == "__main__":
         "-test",
         action="store_true",
         default=False,
-        help="Run on the Test routine. This routine fixes the random seeds and executes the algorithm once.",
+        help="Run on the Test routine. This routine fixes the random "
+        "seeds and executes the algorithm once.",
         dest="TEST",
     )
 
     args = parser.parse_args()
+
+    if args.WRITESTDCONF is not None:
+        conf = inspect.getfullargspec(standardisation_methods[args.WRITESTDCONF])
+        configuration = {"method": args.WRITESTDCONF, "train_frac": 0.8}
+        if len(conf.args) > 1:
+            configuration.update({"keywordargs": dict(zip(conf.args[1:], conf.defaults))})
+        with open(
+            os.path.join(os.getcwd(), "standardisation.yaml"), "w", encoding="utf-8"
+        ) as f:
+            yaml.safe_dump(configuration, f)
+        sys.exit(0)
+
+    assert len(args.INTERVAL) <= 2, "RQS Interval should be a single value or a pair."
 
     if not os.path.isdir(args.OUTPATH):
         os.mkdir(args.OUTPATH)

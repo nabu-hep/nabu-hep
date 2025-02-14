@@ -1,1 +1,3 @@
-__version__ = "0.0.1"
+"""Version number (major.minor.patch[-label])"""
+
+__version__ = "0.0.1-rc"

@@ -1,6 +1,6 @@
 from ._version import __version__
 from .likelihood import Likelihood
-from .transform_base import PosteriorTransform
+from .transform_base import *
 
 
 def version() -> str:

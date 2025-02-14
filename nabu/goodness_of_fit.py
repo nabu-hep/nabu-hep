@@ -1,5 +1,5 @@
 import warnings
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Generator, Sequence
 
 import numpy as np
 from scipy.stats import chi2, kstest, norm
@@ -71,7 +71,11 @@ def calculate_relative(method_fcn, values, variances):
 
 class Histogram:
     r"""
-    _summary_
+    Create a histogram object for the underlying :math:`\chi^2` distribution.
+
+    .. note::
+
+        This class assumes that the base distribution of the flow is unit gaussian.
 
     Args:
         dim (``int``): number of features.
@@ -140,13 +144,13 @@ class Histogram:
         return len(self.bins) - 1
 
     @property
-    def bin_mask(self):
+    def bin_mask(self) -> Generator[np.ndarray]:
         """Mask the values for each bin"""
         for left, right in self.bin_edges:
             yield (self.vals >= left) * (self.vals < right)
 
     @property
-    def bin_edges(self):
+    def bin_edges(self) -> Generator[np.ndarray]:
         """Get bin edges"""
         for n in range(len(self.bins) - 1):
             yield self.bins[n : n + 2]
@@ -216,7 +220,7 @@ class Histogram:
     @property
     def residuals_pvalue(self) -> float:
         """Compute the p-value for residuals"""
-        pull = self.pull
+        pull = self.pull[:-1]  # K-1 independent variables
         return 1.0 - chi2.cdf(np.sum(pull**2), df=len(pull))
 
     def pull_mask(self, condition: Callable[[np.ndarray], Sequence[bool]]) -> np.ndarray:
