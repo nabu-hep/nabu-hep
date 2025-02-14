@@ -20,7 +20,7 @@ requirements = [
 ]
 
 setup(
-    name="nabu",
+    name="nabu-hep",
     version=version,
     description=("Smooth inference for reinterpretation studies"),
     long_description=long_description,
