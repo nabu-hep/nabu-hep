@@ -188,7 +188,7 @@ class Likelihood(ABC):
         if path.suffix != ".nabu":
             path = path.with_suffix(".nabu")
         config = self.serialise()
-        config.update({"version": version("nabu")})
+        config.update({"version": version("nabu-hep")})
 
         with open(str(path), "wb") as f:
             hyperparam_str = json.dumps(config, cls=NumpyEncoder)
