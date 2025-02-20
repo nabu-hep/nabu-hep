@@ -24,7 +24,7 @@
     "related_identifiers": [
         {
             "scheme": "doi",
-            "identifier": "<DOI>",
+            "identifier": "https://doi.org/10.48550/arXiv.2502.09494",
             "relation": "isDocumentedBy",
             "resource_type": "publication-article"
         },
@@ -32,11 +32,6 @@
             "scheme": "url",
             "identifier": "https://github.com/nabu-hep/nabu-hep/tree/v0.0.1",
             "relation": "isSupplementTo"
-        },
-        {
-            "scheme": "url",
-            "identifier": "https://nabu-hep.readthedocs.io/",
-            "relation": "isDocumentedBy"
         }
     ]
 }
