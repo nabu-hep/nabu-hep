@@ -4,7 +4,7 @@
 
 Documentation of the package will be release later. Once the package is installed please use ``nabu-fit-to-data`` script to construct likelihoods for a given dataset. Details on arguments can be accessed via ``nabu-fit-to-data -h``.
 
-# Installation
+## Installation
 
 Nabu can be installed through PyPi
 
