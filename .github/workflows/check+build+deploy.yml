@@ -5,6 +5,7 @@ on:
     types: [published]
   push:
     branches: ["releases/**"]
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -80,4 +81,4 @@ jobs:
         with:
          user:     ${{ secrets.TWINE_USERNAME }}
          password: ${{ secrets.TWINE_PASSWORD }}
-         skip_existing: true
+         skip-existing: true
