@@ -1,0 +1,14 @@
+[general]
+ignore=B6
+
+# T1
+[title-max-length]
+line-length=120
+
+# T7
+[title-match-regex]
+regex=^\[(github|infra|nabu|test)\]\s.*
+
+# B5
+[body-min-length]
+min-length=15
