@@ -7,8 +7,6 @@ from jax import vmap
 from nabu import Likelihood
 from nabu.transform_base import PosteriorTransform
 
-from ._train import fit, get_optimizer
-
 __all__ = ["FlowLikelihood"]
 
 
@@ -103,6 +101,8 @@ class FlowLikelihood(Likelihood):
             ``dict[str, list[float]]``:
             Training history
         """
+        from ._train import fit, get_optimizer
+
         optimizer = optax.inject_hyperparams(get_optimizer(optimizer))(
             learning_rate=learning_rate
         )
