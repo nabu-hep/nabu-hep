@@ -54,6 +54,10 @@ class PosteriorTransform:
             log_axes = kwargs.get("log_axes", None)
             log_shift = kwargs.get("log_shift", None)
             log_scale = kwargs.get("log_scale", None)
+            if log_shift is not None:
+                log_shift = np.array(log_shift)
+            if log_scale is not None:
+                log_scale = np.array(log_scale)
             self._metadata = {
                 "shift-scale": {
                     "shift": mean.tolist(),
