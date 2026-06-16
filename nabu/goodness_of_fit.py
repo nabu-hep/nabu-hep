@@ -2,13 +2,82 @@ import warnings
 from collections.abc import Callable, Generator, Sequence
 
 import numpy as np
-from scipy.stats import chi2, kstest, norm
+from scipy.stats import chi2, kstwo, kstwobign, norm
 
-__all__ = ["Histogram"]
+__all__ = ["Histogram", "weighted_kstest"]
 
 
 def __dir__():
     return __all__
+
+
+def weighted_kstest(
+    vals: np.ndarray,
+    cdf: Callable[[np.ndarray], np.ndarray],
+    weights: np.ndarray = None,
+) -> tuple[float, float, float]:
+    r"""
+    One-sample Kolmogorov-Smirnov test against ``cdf`` for (optionally) weighted data.
+
+    The test statistic is the supremum distance between the weighted empirical CDF
+    and ``cdf``. The p-value is computed from the Kish effective sample size
+    :math:`n_{\rm eff} = (\sum w)^2 / \sum w^2` rather than the raw number of rows:
+
+    * when all weights are equal (the unweighted case), ``n_eff`` is the integer
+      sample size and the **exact** Kolmogorov-Smirnov distribution is used, exactly
+      reproducing :func:`scipy.stats.kstest`;
+    * with non-uniform weights ``n_eff`` is generally fractional, for which no exact
+      finite-sample distribution exists, so the **asymptotic** Kolmogorov distribution
+      is used instead.
+
+    This is the appropriate test for importance samples with non-uniform weights:
+    feeding a weighted-bootstrap (resampled, hence duplicated) set into an unweighted
+    KS test violates the i.i.d. assumption and over-powers the test, because each
+    duplicated point is counted as an independent draw.
+
+    Args:
+        vals (``np.ndarray``): sample values, shape ``(N,)``.
+        cdf (``Callable``): cumulative distribution function to test against. Must be
+            vectorised over a 1d array of sorted values.
+        weights (``np.ndarray``, default ``None``): per-sample weights. If ``None``,
+            taken as ``1`` (recovering the unweighted test).
+
+    Returns:
+        ``tuple[float, float, float]``:
+        the KS statistic ``D``, the p-value, and the effective sample size.
+    """
+    vals = np.asarray(vals, dtype=float)
+    weights = np.ones_like(vals) if weights is None else np.asarray(weights, dtype=float)
+
+    if len(vals) != len(weights):
+        raise ValueError(
+            f"vals and weights must have the same length, got {len(vals)} and "
+            f"{len(weights)}"
+        )
+    if len(vals) == 0:
+        raise ValueError("vals must contain at least one sample")
+    if np.any(weights < 0.0):
+        raise ValueError("weights must be non-negative")
+    sumw = weights.sum()
+    if not sumw > 0.0:
+        raise ValueError("the total weight must be positive")
+
+    order = np.argsort(vals, kind="mergesort")
+    v, w = vals[order], weights[order]
+    ecdf_hi = np.cumsum(w) / sumw  # weighted ECDF just after each point
+    ecdf_lo = ecdf_hi - w / sumw  # weighted ECDF just before each point
+    f = cdf(v)
+    d = float(max(np.max(ecdf_hi - f), np.max(f - ecdf_lo)))
+    n_eff = float(sumw**2 / np.sum(w**2))  # Kish effective sample size
+
+    if np.allclose(w, w[0]):
+        # Equally weighted points: the effective N is the integer sample size and the
+        # exact KS distribution applies (matching scipy.stats.kstest).
+        pvalue = float(kstwo.sf(d, len(w)))
+    else:
+        # Fractional effective N: fall back to the asymptotic Kolmogorov distribution.
+        pvalue = float(kstwobign.sf(np.sqrt(n_eff) * d))
+    return d, pvalue, n_eff
 
 
 def sqrt_method(values, *args, **kwargs):
@@ -113,8 +182,18 @@ class Histogram:
     ) -> None:
         self.dim = dim
         self.vals = vals
-        self.weights = weights or np.ones(len(self.vals))
-        assert len(self.vals) == len(self.weights), "Invalid shape"
+        self.weights = (
+            np.ones(len(self.vals)) if weights is None else np.asarray(weights, float)
+        )
+        if len(self.vals) != len(self.weights):
+            raise ValueError(
+                f"vals and weights must have the same length, got {len(self.vals)} "
+                f"and {len(self.weights)}"
+            )
+        if np.any(self.weights < 0.0):
+            raise ValueError("weights must be non-negative")
+        if not np.sum(self.weights) > 0.0:
+            raise ValueError("the total weight must be positive")
 
         if isinstance(bins, int):
             assert max_val is not None, "If bins are not defined, max_val is needed"
@@ -212,10 +291,30 @@ class Histogram:
 
     @property
     def kstest_pval(self) -> float:
-        """Compute p-value for Kolmogorov-Smirnov test"""
+        """Weighted Kolmogorov-Smirnov p-value vs chi2(dim), using effective N"""
         if self._kstest is None:
-            self._kstest = kstest(self.vals, cdf=lambda x: chi2.cdf(x, df=self.dim))
-        return self._kstest.pvalue
+            self._kstest = weighted_kstest(
+                self.vals, lambda x: chi2.cdf(x, df=self.dim), self.weights
+            )
+        return self._kstest[1]
+
+    @property
+    def kstest_dval(self) -> float:
+        """Weighted Kolmogorov-Smirnov statistic D vs chi2(dim)"""
+        if self._kstest is None:
+            self._kstest = weighted_kstest(
+                self.vals, lambda x: chi2.cdf(x, df=self.dim), self.weights
+            )
+        return self._kstest[0]
+
+    @property
+    def effective_nobs(self) -> float:
+        """Kish effective sample size of the (weighted) values"""
+        if self._kstest is None:
+            self._kstest = weighted_kstest(
+                self.vals, lambda x: chi2.cdf(x, df=self.dim), self.weights
+            )
+        return self._kstest[2]
 
     @property
     def residuals_pvalue(self) -> float:
