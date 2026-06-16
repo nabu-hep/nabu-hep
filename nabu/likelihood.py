@@ -10,9 +10,9 @@ import jax.numpy as jnp
 import jax.random as jr
 import numpy as np
 from jax.tree_util import tree_structure
-from scipy.stats import chi2, kstest
+from scipy.stats import chi2
 
-from .goodness_of_fit import Histogram
+from .goodness_of_fit import Histogram, weighted_kstest
 
 __all__ = ["Likelihood"]
 
@@ -115,16 +115,32 @@ class Likelihood(ABC):
         """Compute the cumulative density function at x shape (N,dof)"""
         return chi2.cdf(self.chi2(x), df=x.shape[-1])
 
-    def kstest_pvalue(self, test_dataset: np.ndarray) -> float:
-        """Compute p-value for Kolmogorov-Smirnov test"""
-        return kstest(
-            self.chi2(test_dataset), cdf=partial(chi2.cdf, df=test_dataset.shape[-1])
-        ).pvalue
+    def kstest_pvalue(
+        self, test_dataset: np.ndarray, weights: np.ndarray = None
+    ) -> float:
+        """
+        Weighted Kolmogorov-Smirnov p-value vs the chi2 distribution.
+
+        Args:
+            test_dataset (``np.ndarray``): test dataset, shape `(N, DoF)`
+            weights (``np.ndarray``, default ``None``): per-sample weights. If ``None``,
+                taken as ``1`` (recovering the unweighted test). For weighted importance
+                samples the p-value is computed from the Kolmogorov distribution using
+                the effective sample size, avoiding the over-powering that results from
+                feeding a resampled (duplicated) set into an unweighted test.
+        """
+        _, pvalue, _ = weighted_kstest(
+            self.chi2(test_dataset),
+            partial(chi2.cdf, df=test_dataset.shape[-1]),
+            weights,
+        )
+        return pvalue
 
     def goodness_of_fit(
         self,
         test_dataset: np.ndarray,
         prob_per_bin: float = 0.1,
+        weights: np.ndarray = None,
     ) -> Histogram:
         """
         Construct binned and unbinned goodness of fit test.
@@ -132,6 +148,9 @@ class Likelihood(ABC):
         Args:
             test_dataset (``np.ndarray``): test dataset, shape `(N, DoF)`
             prob_per_bin (``float``, default ``0.1``): probability of yields in each bin
+            weights (``np.ndarray``, default ``None``): per-sample weights. If ``None``,
+                taken as ``1``. Used for both the binned residuals and the (weighted)
+                Kolmogorov-Smirnov test.
 
         Returns:
             ``Histogram``:
@@ -141,21 +160,32 @@ class Likelihood(ABC):
         bins = chi2.ppf(
             np.linspace(0.0, 1.0, int(np.ceil(1.0 / prob_per_bin)) + 1), df=dim
         )
-        return Histogram(dim=dim, bins=bins, vals=self.chi2(test_dataset))
+        return Histogram(
+            dim=dim, bins=bins, vals=self.chi2(test_dataset), weights=weights
+        )
 
-    def is_valid(self, test_data: np.ndarray, threshold: float = 0.03) -> bool:
+    def is_valid(
+        self,
+        test_data: np.ndarray,
+        threshold: float = 0.03,
+        weights: np.ndarray = None,
+    ) -> bool:
         """
         Check if the likelihood is valid for a given dataset.
 
         Args:
             test_data (``np.ndarray``): Test dataset
             threshold (``float``, default ``0.03``): p-value threshold.
+            weights (``np.ndarray``, default ``None``): per-sample weights. If ``None``,
+                taken as ``1``.
 
         Returns:
             ``bool``:
             Returns `True` if the model passes the threshold.
         """
-        hist: Histogram = self.goodness_of_fit(test_dataset=test_data, prob_per_bin=0.1)
+        hist: Histogram = self.goodness_of_fit(
+            test_dataset=test_data, prob_per_bin=0.1, weights=weights
+        )
         return all(np.greater_equal([hist.residuals_pvalue, hist.kstest_pval], threshold))
 
     @abstractmethod
