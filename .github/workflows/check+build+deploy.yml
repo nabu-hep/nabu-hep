@@ -31,11 +31,15 @@ jobs:
         python -m pip install pytest pytest-cov
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         python -m pip install -e .
-    - name: Test with pytest
+    - name: Test the CLI script
       run: |
         nabu-fit-to-data -test -dp test/data-2020-025-transformed.npz -op test/results -e 20
         # * p(χ²) = 0.0041%, p(KS) = 19.5177%
-        pytest test/*py
+    - name: Test with pytest
+      # Run the test suite even if the CLI smoke test above failed, so both are
+      # always reported. The job still fails if either step fails.
+      if: ${{ !cancelled() }}
+      run: pytest test/*py
 
   build:
     name: Build wheel
