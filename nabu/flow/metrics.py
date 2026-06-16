@@ -24,7 +24,10 @@ class GoodnessOfFit:
         self.prob_per_bin = prob_per_bin
 
     def __call__(
-        self, dist: AbstractTransformed, test_data: np.ndarray
+        self,
+        dist: AbstractTransformed,
+        test_data: np.ndarray,
+        weights: np.ndarray = None,
     ) -> dict[str, float]:
         dim = test_data.shape[-1]
         chi2_dist = np.sum(
@@ -33,5 +36,5 @@ class GoodnessOfFit:
         bins = chi2.ppf(
             np.linspace(0.0, 1.0, int(np.ceil(1.0 / self.prob_per_bin)) + 1), df=dim
         )
-        hist = Histogram(dim=dim, bins=bins, vals=chi2_dist)
+        hist = Histogram(dim=dim, bins=bins, vals=chi2_dist, weights=weights)
         return {"kstest_pvalue": hist.kstest_pval, "chi2_pvalue": hist.residuals_pvalue}

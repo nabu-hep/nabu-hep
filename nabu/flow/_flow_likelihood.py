@@ -78,12 +78,14 @@ class FlowLikelihood(Likelihood):
         plot_progress: str = None,
         metrics: list[callable] = None,
         log: str = None,
+        *,
+        weights: np.ndarray = None,
     ) -> dict[str, list[float]]:
         """
         Fit likelihood to the data
 
         Args:
-            dataset (``np.ndarray``): _description_
+            dataset (``np.ndarray``): training samples, shape ``(N, DoF)``.
             condition (``np.ndarray``, default ``None``): _description_
             learning_rate (``float``, default ``1e-4``): _description_
             optimizer (``str``, default ``"adam"``): _description_
@@ -96,6 +98,11 @@ class FlowLikelihood(Likelihood):
             verbose (``bool``, default ``True``): _description_
             random_seed (``int``): _description_
             plot_progress (``str``, default ``None``): _description_
+            weights (``np.ndarray``, default ``None``): keyword-only per-sample weights,
+                shape ``(N,)``. If given, the flow is fit by weighted maximum
+                likelihood, which targets the density estimated by the
+                (importance-)weighted samples and removes the need to unweight via
+                resampling. If ``None``, all samples are weighted equally.
 
         Returns:
             ``dict[str, list[float]]``:
@@ -110,6 +117,7 @@ class FlowLikelihood(Likelihood):
             key=jr.key(random_seed),
             dist=self.model,
             x=self.transform.backward(dataset),
+            weights=weights,
             L1_regularisation_coef=L1_regularisation_coef,
             L2_regularisation_coef=L2_regularisation_coef,
             condition=condition,
