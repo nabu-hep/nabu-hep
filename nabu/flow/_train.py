@@ -42,11 +42,17 @@ class MaximumLikelihoodLoss:
     """Loss for fitting a flow with maximum likelihood (negative log likelihood).
 
     This loss can be used to learn either conditional or unconditional distributions.
+    When ``weighted`` is ``True`` the loss is the weighted mean negative log likelihood
+    :math:`-\\sum_i w_i \\log p(x_i) / \\sum_i w_i`, which targets the density that the
+    (importance-)weighted samples estimate. In that case the per-sample weights are
+    passed positionally right after ``x`` (i.e. ``(x, weights[, condition])``), so that
+    they never collide with the optional conditioning variables.
     """
 
-    def __init__(self, l1: float = 0.0, l2: float = 0.0):
+    def __init__(self, l1: float = 0.0, l2: float = 0.0, weighted: bool = False):
         self.l1 = l1
         self.l2 = l2
+        self.weighted = weighted
 
     @eqx.filter_jit
     def __call__(
@@ -54,12 +60,23 @@ class MaximumLikelihoodLoss:
         params: AbstractDistribution,
         static: AbstractDistribution,
         x: Array,
-        condition: Array = None,
+        *rest: Array,
         key: PRNGKeyArray = None,
     ) -> Float[Array, ""]:
         """Compute the loss. Key is ignored (for consistency of API)."""
+        if self.weighted:
+            weights, *condition = rest
+            condition = condition[0] if condition else None
+        else:
+            weights = None
+            condition = rest[0] if rest else None
+
         dist = unwrap(eqx.combine(params, static))
-        nll = -dist.log_prob(x, condition).mean()
+        log_prob = dist.log_prob(x, condition)
+        if weights is None:
+            nll = -log_prob.mean()
+        else:
+            nll = -jnp.sum(weights * log_prob) / jnp.sum(weights)
 
         if self.l2 != 0.0:
             nll += self.l2 * sum(jnp.sum(jnp.square(p)) for p in tree_leaves(params))
@@ -88,6 +105,8 @@ def fit(
     plot_progress: str = None,
     metrics: list[callable] = None,
     log: str = None,
+    *,
+    weights: ArrayLike = None,
 ):
     r"""Train a PyTree (e.g. a distribution) to samples from the target.
 
@@ -116,14 +135,31 @@ def fit(
         show_progress: Whether to show progress bar. Defaults to True.
         lr_scheduler: Learning rate scheduler. Defaults to None.
         plot_progress: Name of the monitoring plots. If given: plot the model once in a while to monitor progress visually. Defaults to None.
+        weights: Keyword-only per-sample weights. If given, the loss becomes the
+            weighted mean negative log likelihood, which targets the density estimated
+            by the (importance-)weighted samples. Defaults to None (unweighted).
 
     Returns:
         A tuple containing the trained distribution and the losses.
     """
-    data = (x,) if condition is None else (x, condition)
-    data = tuple(jnp.asarray(a) for a in data)
+    # Assemble the data arrays as (x[, weights][, condition]). Weights are placed
+    # right after x so the loss receives them positionally without colliding with the
+    # optional condition. train_val_split and the per-epoch shuffle permute every array
+    # with the same key, so weights stay aligned with their samples throughout.
+    arrays = [x]
+    weight_idx = None
+    if weights is not None:
+        weight_idx = len(arrays)
+        arrays.append(weights)
+    if condition is not None:
+        arrays.append(condition)
+    data = tuple(jnp.asarray(a) for a in arrays)
 
-    loss_fn = MaximumLikelihoodLoss(l1=L1_regularisation_coef, l2=L2_regularisation_coef)
+    loss_fn = MaximumLikelihoodLoss(
+        l1=L1_regularisation_coef,
+        l2=L2_regularisation_coef,
+        weighted=weights is not None,
+    )
 
     params, static = eqx.partition(
         dist,
@@ -176,9 +212,14 @@ def fit(
             batch_losses.append(loss_i)
         losses["train"].append((sum(batch_losses) / len(batch_losses)).item())
         train_summary.scalar("loss", losses["train"][-1], epoch)
+        train_metric_kwargs = (
+            {} if weight_idx is None else {"weights": train_data[weight_idx]}
+        )
         for metric in metrics:
             losses = _append_metric(
-                metric(eqx.combine(params, static), train_data[0]), losses, "train"
+                metric(eqx.combine(params, static), train_data[0], **train_metric_kwargs),
+                losses,
+                "train",
             )
 
         # Val epoch
@@ -189,9 +230,14 @@ def fit(
             batch_losses.append(loss_i)
         losses["val"].append((sum(batch_losses) / len(batch_losses)).item())
         val_summary.scalar("loss", losses["val"][-1], epoch)
+        val_metric_kwargs = (
+            {} if weight_idx is None else {"weights": val_data[weight_idx]}
+        )
         for metric in metrics:
             losses = _append_metric(
-                metric(eqx.combine(params, static), val_data[0]), losses, "val"
+                metric(eqx.combine(params, static), val_data[0], **val_metric_kwargs),
+                losses,
+                "val",
             )
 
         if lr_scheduler is not None:
