@@ -17,3 +17,24 @@ Or current repository can be used via
 ```bash
 python -m pip install --upgrade "git+https://github.com/nabu-hep/nabu-hep"
 ```
+
+## Development
+
+This repository uses pixi for local development and test environments.
+
+```bash
+pixi install
+pixi run test
+```
+
+To run the supported Python versions locally:
+
+```bash
+pixi run test-all
+```
+
+To build the package:
+
+```bash
+pixi run build
+```
