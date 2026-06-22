@@ -10,36 +10,30 @@ on:
 
 jobs:
   check:
-    name: Check on ${{ matrix.os }} with Python ${{ matrix.python-version }}
+    name: Check on ${{ matrix.os }} with ${{ matrix.environment }}
     runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        environment: ["py310", "py311", "py312"]
         os: [ubuntu-latest, macos-latest]
 
     steps:
     - uses: actions/checkout@v6
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6
+    - name: Set up pixi
+      uses: prefix-dev/setup-pixi@v0.9.6
       with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install pytest pytest-cov
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        python -m pip install -e .
+        pixi-version: v0.55.0
+        environments: ${{ matrix.environment }}
+        frozen: true
     - name: Test the CLI script
-      run: |
-        nabu-fit-to-data -test -dp test/data-2020-025-transformed.npz -op test/results -e 20
-        # * p(χ²) = 0.0041%, p(KS) = 19.5177%
+      run: pixi run -e ${{ matrix.environment }} fit-test-artifacts
     - name: Test with pytest
       # Run the test suite even if the CLI smoke test above failed, so both are
       # always reported. The job still fails if either step fails.
       if: ${{ !cancelled() }}
-      run: pytest test/*py
+      run: pixi run -e ${{ matrix.environment }} pytest
 
   build:
     name: Build wheel
@@ -49,11 +43,15 @@ jobs:
       - name: Checkout git repository
         uses: actions/checkout@v6
 
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@v0.9.6
+        with:
+          pixi-version: v0.55.0
+          environments: py312
+          frozen: true
+
       - name: Build NABU wheel
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install wheel
-          python setup.py bdist_wheel
+        run: pixi run -e py312 build
 
       - name: Upload wheels as artifacts
         uses: actions/upload-artifact@v7
