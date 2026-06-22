@@ -1,0 +1,103 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nabu-hep"
+dynamic = ["version"]
+description = "Smooth inference for reinterpretation studies"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Jack Y. Araz", email = "jack.araz@stonybrook.edu" },
+]
+dependencies = [
+    "numpy>=1.24.4,<2.0.0",
+    "jax==0.4.30",
+    "equinox==0.11.7",
+    "flowjax==15.1.0",
+    "scipy>=1.10.0",
+    "pyyaml",
+    "setuptools",
+    "tqdm>=4.64.0",
+    "matplotlib",
+    "tensorboardx>=2.6",
+]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.urls]
+"Bug Tracker" = "https://github.com/nabu-hep/nabu/issues"
+Documentation = "https://nabu-hep.readthedocs.io"
+Repository = "https://github.com/nabu-hep/nabu"
+Homepage = "https://github.com/nabu-hep/nabu"
+Download = "https://github.com/nabu-hep/nabu/archive/refs/tags/v0.0.1.tar.gz"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.1.2",
+    "pytest-cov>=3.0.0",
+    "twine>=3.7.1",
+    "wheel>=0.37.1",
+]
+
+[tool.setuptools]
+packages = ["nabu", "nabu.flow"]
+script-files = ["bin/nabu-fit-to-data"]
+
+[tool.setuptools.dynamic]
+version = { attr = "nabu._version.__version__" }
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-64", "osx-arm64"]
+
+[tool.pixi.pypi-dependencies]
+nabu-hep = { path = ".", editable = true }
+
+[tool.pixi.activation.env]
+PYTHONNOUSERSITE = "1"
+
+[tool.pixi.feature.py310.dependencies]
+python = "3.10.*"
+
+[tool.pixi.feature.py311.dependencies]
+python = "3.11.*"
+
+[tool.pixi.feature.py312.dependencies]
+python = "3.12.*"
+
+[tool.pixi.feature.test.dependencies]
+pytest = ">=7.1.2"
+pytest-cov = ">=3.0.0"
+python-build = "*"
+twine = ">=3.7.1"
+wheel = ">=0.37.1"
+pre-commit = "*"
+
+[tool.pixi.tasks]
+fit-test-artifacts = "nabu-fit-to-data -test -dp test/data-2020-025-transformed.npz -op test/results -e 20"
+pytest = "pytest test/*py"
+test = { depends-on = ["fit-test-artifacts", "pytest"] }
+build = "python -m build"
+pre-commit = "pre-commit run --all-files"
+_test-py310 = "pixi run -e py310 test"
+_test-py311 = "pixi run -e py311 test"
+_test-py312 = "pixi run -e py312 test"
+test-all = { depends-on = ["_test-py310", "_test-py311", "_test-py312"] }
+
+[tool.pixi.environments]
+default = { features = ["py312", "test"], solve-group = "py312" }
+py310 = { features = ["py310", "test"], solve-group = "py310" }
+py311 = { features = ["py311", "test"], solve-group = "py311" }
+py312 = { features = ["py312", "test"], solve-group = "py312" }
