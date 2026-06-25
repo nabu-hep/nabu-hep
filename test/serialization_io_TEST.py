@@ -118,3 +118,32 @@ class TestSaveLoadRoundTrip:
         )
         with pytest.raises(SerializationError, match="user-defined"):
             likelihood.save(str(tmp_path / "model.nabu"))
+
+    def test_surplus_positional_argument_is_rejected(self):
+        # Positional arguments beyond the fixed parameters must raise rather than
+        # be silently dropped (which would yield an incorrect model + metadata).
+        from nabu.flow import masked_autoregressive_flow
+        from nabu.flow._serialisation_utils import UnsupportedMethod
+
+        with pytest.raises(UnsupportedMethod, match="positional"):
+            masked_autoregressive_flow(
+                2, None, None, 8, 50, 1, "relu", "reversed", 0, "surplus"
+            )
+
+    def test_planar_flow_round_trips(self, tmp_path):
+        # Regression test for the planar **mlp_kwargs bug (#13): describing,
+        # saving and reloading a planar flow must succeed. Previously its
+        # metadata carried the unserialisable ArgumentType.REQUIRED sentinel.
+        from nabu.flow import planar_flow
+
+        likelihood = planar_flow(dim=2, flow_layers=2)
+        spec = likelihood.to_spec()
+        assert spec.model.tag == "planar_flow"
+
+        path = tmp_path / "planar.nabu"
+        likelihood.save(str(path))
+        loaded = nabu.Likelihood.load(str(path), random_seed=0)
+
+        assert loaded.model_type == "flow"
+        x = np.zeros((4, 2))
+        assert np.allclose(loaded.log_prob(x), likelihood.log_prob(x))
