@@ -52,7 +52,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["nabu", "nabu.flow"]
+packages = ["nabu", "nabu.flow", "nabu.serialization"]
 script-files = ["bin/nabu-fit-to-data"]
 
 [tool.setuptools.dynamic]
