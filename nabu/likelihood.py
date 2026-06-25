@@ -24,6 +24,28 @@ def __dir__():
 # pylint: disable=import-outside-toplevel
 
 
+def _posterior_transform_to_spec(transform):
+    """Map a runtime :class:`~nabu.transform_base.PosteriorTransform` to its spec.
+
+    A ``user-defined`` transform is mapped to
+    :class:`~nabu.serialization.UserDefinedTransformSpec` (which refuses to
+    serialise) instead of being silently degraded to the identity transform, as
+    happened with the legacy format.
+    """
+    from nabu.serialization import (
+        IdentityTransformSpec,
+        PosteriorTransformSpec,
+        UserDefinedTransformSpec,
+    )
+
+    if getattr(transform, "_name", None) == "user-defined":
+        return UserDefinedTransformSpec()
+    metadata = transform.to_dict()
+    if not metadata:
+        return IdentityTransformSpec()
+    return PosteriorTransformSpec.from_tagged(metadata)
+
+
 class Likelihood(ABC):
     """Base Likelihood Definition"""
 
@@ -207,6 +229,26 @@ class Likelihood(ABC):
             "posterior_transform": self.transform.to_dict(),
         }
 
+    def to_spec(self):
+        """
+        Build a validated description of this likelihood.
+
+        Returns:
+            ``nabu.serialization.LikelihoodSpec``:
+            Typed, validated specification of the model architecture and
+            posterior transform, ready to be serialised to the ``.nabu`` header.
+        """
+        from nabu.serialization import FORMAT_VERSION, FlowSpec, LikelihoodSpec
+
+        assert self.model_type != "base", "Invalid model type"
+        return LikelihoodSpec(
+            model_type=self.model_type,
+            model=FlowSpec.from_tagged(self.to_dict()),
+            posterior_transform=_posterior_transform_to_spec(self.transform),
+            version=version("nabu-hep"),
+            format_version=FORMAT_VERSION,
+        )
+
     def save(self, filename: str) -> None:
         """
         Save likelihood
@@ -217,12 +259,10 @@ class Likelihood(ABC):
         path = Path(filename)
         if path.suffix != ".nabu":
             path = path.with_suffix(".nabu")
-        config = self.serialise()
-        config.update({"version": version("nabu-hep")})
+        header = self.to_spec().to_dict()
 
         with open(str(path), "wb") as f:
-            hyperparam_str = json.dumps(config, cls=NumpyEncoder)
-            f.write((hyperparam_str + "\n").encode())
+            f.write((json.dumps(header, cls=NumpyEncoder) + "\n").encode())
             eqx.tree_serialise_leaves(f, self.model)
 
     @staticmethod
@@ -238,41 +278,18 @@ class Likelihood(ABC):
             ``Likelihood``:
             Likelihood object
         """
-        from nabu.flow import get_bijector, get_flow
-        from nabu.transform_base import PosteriorTransform
+        from nabu.serialization import LikelihoodSpec, SerializationError
 
         nabu_file = Path(filename)
-        assert nabu_file.suffix == ".nabu" and nabu_file.exists(), "Invalid input format."
+        if nabu_file.suffix != ".nabu" or not nabu_file.exists():
+            raise SerializationError(f"{nabu_file} is not an existing .nabu file")
 
         with open(str(nabu_file), "rb") as f:
-            likelihood_definition = json.loads(f.readline().decode())
-            assert (
-                likelihood_definition["model_type"] == "flow"
-            ), "Given file does not contain a flow type likelihood"
-            flow_id, flow_kwargs = list(*likelihood_definition["model"].items())
-
-            if flow_kwargs.get("transformer", None) is not None:
-                transformer, transformer_kwargs = list(
-                    *flow_kwargs["transformer"].items()
-                )
-                for key in transformer_kwargs:
-                    if isinstance(transformer_kwargs[key], list):
-                        transformer_kwargs[key] = tuple(transformer_kwargs[key])
-                flow_kwargs["transformer"] = get_bijector(transformer)(
-                    **transformer_kwargs
-                )
-
-            flow_kwargs["random_seed"] = random_seed
-            likelihood = get_flow(flow_id)(**flow_kwargs)
+            header = json.loads(f.readline().decode())
+            spec = LikelihoodSpec.from_dict(**header)
+            likelihood = spec.model.build(random_seed)
             likelihood.model = eqx.tree_deserialise_leaves(f, likelihood.model)
-
-            if likelihood_definition["posterior_transform"] != {}:
-                ptrans_def, kwargs = list(
-                    *likelihood_definition["posterior_transform"].items()
-                )
-                likelihood.transform = PosteriorTransform(ptrans_def, **kwargs)
-            else:
-                likelihood.transform = PosteriorTransform()
+            likelihood.transform = spec.posterior_transform.build()
 
         return likelihood
 
