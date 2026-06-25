@@ -116,6 +116,7 @@ class PosteriorTransform:
 
         self._forward = forward
         self._backward = backward
+        self._name = name
 
     def to_dict(self):
         return self._metadata
