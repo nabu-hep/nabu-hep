@@ -85,11 +85,18 @@ twine = ">=3.7.1"
 wheel = ">=0.37.1"
 pre-commit = "*"
 
+[tool.pixi.feature.docs.dependencies]
+sphinx = "*"
+sphinx_rtd_theme = "*"
+sphinx-argparse = "*"
+sphinx-autodoc-typehints = "*"
+
 [tool.pixi.tasks]
 fit-test-artifacts = "nabu-fit-to-data -test -dp test/data-2020-025-transformed.npz -op test/results -e 20"
 pytest = "pytest test/*py"
 test = { depends-on = ["fit-test-artifacts", "pytest"] }
 build = "python -m build"
+docs = "sphinx-build -b html doc doc/_build/html"
 pre-commit = "pre-commit run --all-files"
 _test-py310 = "pixi run -e py310 test"
 _test-py311 = "pixi run -e py311 test"
@@ -101,3 +108,4 @@ default = { features = ["py312", "test"], solve-group = "py312" }
 py310 = { features = ["py310", "test"], solve-group = "py310" }
 py311 = { features = ["py311", "test"], solve-group = "py311" }
 py312 = { features = ["py312", "test"], solve-group = "py312" }
+docs = { features = ["py312", "docs"], solve-group = "docs" }
