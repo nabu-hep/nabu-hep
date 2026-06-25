@@ -4,7 +4,7 @@ on:
   release:
     types: [published]
   push:
-    branches: ["releases/**"]
+    branches: ["main", "releases/**"]
   pull_request:
   workflow_dispatch:
 
@@ -58,6 +58,108 @@ jobs:
         with:
           name: wheel
           path: ./dist/*.whl
+
+  docs:
+    name: Build and deploy documentation
+    runs-on: ubuntu-latest
+    needs: check
+    concurrency:
+      group: pages-docs-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Checkout git repository
+        uses: actions/checkout@v6
+
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@v0.9.6
+        with:
+          pixi-version: v0.70.2
+          environments: docs
+          frozen: true
+
+      - name: Build documentation
+        run: pixi run -e docs docs
+
+      # Deploy to the pre-built GitHub Pages repository nabu-hep/nabu-hep.github.io.
+      # Targets depend on the triggering event:
+      #   - release (tag TAG): the root "/" and the "{TAG}/" subdirectory
+      #   - push to main:      the "dev/" subdirectory
+      #   - pull request:      the "pr{PRNUMBER}/" subdirectory
+      # Pull requests from forks cannot access secrets, so their deploy is skipped
+      # (the build above still validates the documentation).
+      - name: Deploy documentation
+        if: >
+          github.event_name == 'release' ||
+          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DOC_ACCESS_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          TAG: ${{ github.ref_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          SRC="doc/_build/html"
+          PAGES_REPO="nabu-hep/nabu-hep.github.io"
+          WORKTREE="$(mktemp -d)"
+
+          git clone --depth 1 \
+            "https://x-access-token:${DEPLOY_TOKEN}@github.com/${PAGES_REPO}.git" \
+            "$WORKTREE"
+
+          # Replace the contents of a single subdirectory, leaving siblings untouched.
+          deploy_subdir() {
+            local dest="$1"
+            mkdir -p "${WORKTREE}/${dest}"
+            rsync -a --delete "${SRC}/" "${WORKTREE}/${dest}/"
+          }
+
+          # Replace the top-level files but preserve the version/preview subdirectories
+          # (dev/, pr*/, v*/) as well as the .git directory and the .nojekyll sentinel.
+          deploy_root() {
+            rsync -a --delete \
+              --exclude='.git' \
+              --exclude='.nojekyll' \
+              --exclude='/dev' \
+              --exclude='/pr*' \
+              --exclude='/v*' \
+              "${SRC}/" "${WORKTREE}/"
+          }
+
+          case "$EVENT_NAME" in
+            release)
+              deploy_root
+              deploy_subdir "$TAG"
+              MESSAGE="Deploy documentation for release ${TAG}"
+              ;;
+            push)
+              deploy_subdir "dev"
+              MESSAGE="Deploy development documentation (dev/)"
+              ;;
+            pull_request)
+              deploy_subdir "pr${PR_NUMBER}"
+              MESSAGE="Deploy preview documentation (pr${PR_NUMBER}/)"
+              ;;
+            *)
+              echo "Unexpected event '${EVENT_NAME}', nothing to deploy."
+              exit 0
+              ;;
+          esac
+
+          # Ensure the GitHub Pages sentinel is always present.
+          touch "${WORKTREE}/.nojekyll"
+
+          cd "$WORKTREE"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --quiet --staged; then
+            echo "No documentation changes to publish."
+          else
+            git commit -m "$MESSAGE"
+            git push
+          fi
 
   deploy:
     name: Deploy to PyPI
