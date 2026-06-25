@@ -70,6 +70,17 @@ def serialise_method(method: Callable) -> dict:
     for key, item in signature.parameters.items():
         if key in ["self", "key"]:
             continue
+        if item.kind in (
+            inspect.Parameter.VAR_KEYWORD,
+            inspect.Parameter.VAR_POSITIONAL,
+        ):
+            # Variadic parameters (``*args``/``**kwargs``, e.g. planar_flow's
+            # ``**mlp_kwargs``) are not fixed arguments: recording them here
+            # would store the ``ArgumentType.REQUIRED`` sentinel under the
+            # variadic name, which is neither JSON-serialisable nor a valid
+            # argument to forward. Captured at call time instead (see
+            # ``serialise_wrapper``).
+            continue
         if item.default == inspect._empty:
             args_kwargs[key] = ArgumentType.REQUIRED
         elif inspect.isclass(item.default) or inspect.isfunction(item.default):
@@ -125,6 +136,18 @@ class BijectorWrapper:
         return self.bijector(*self._args, **self._kwargs)
 
 
+def _variadic_keyword_name(method: Callable) -> str | None:
+    """Return the name of ``method``'s ``**kwargs`` parameter, or ``None``."""
+    try:
+        signature = inspect.signature(method)
+    except TypeError:
+        signature = inspect.signature(method.__class__)
+    for name, param in signature.parameters.items():
+        if param.kind is inspect.Parameter.VAR_KEYWORD:
+            return name
+    return None
+
+
 def serialise_wrapper(method: Callable):
     """
     _summary_
@@ -141,16 +164,20 @@ def serialise_wrapper(method: Callable):
     """
     serialised_method = serialise_method(method)
     method_name = _get_name(method)
+    var_keyword = _variadic_keyword_name(method)
 
     @wraps(method)
     def wrapper(*args, **kwargs):
+        # Work on a per-call copy of the serialised template, so repeated calls
+        # do not clobber one another's metadata through the shared closure dict.
+        meta = dict(serialised_method[method_name])
         processed_args = []
         processed_kwargs = {}
-        for idx, key in enumerate(serialised_method[method_name]):
+        for idx, key in enumerate(list(meta)):
             if idx < len(args):
                 item = args[idx]
             else:
-                item = kwargs.get(key, serialised_method[method_name][key])
+                item = kwargs.get(key, meta[key])
 
             if isinstance(item, AbstractBijection):
                 raise NotImplementedError(
@@ -158,22 +185,44 @@ def serialise_wrapper(method: Callable):
                 )
 
             if isinstance(item, BijectorWrapper):
-                serialised_method[method_name][key] = item.to_dict()
+                meta[key] = item.to_dict()
                 item = item.execute()
-            elif key not in serialised_method[method_name]:
-                raise UnsupportedMethod(f"invalid argument: {key}")
             elif isinstance(item, (int, str, bool, ndarray, list, tuple, float)):
-                serialised_method[method_name][key] = item
+                meta[key] = item
             else:
-                serialised_method[method_name][key] = serialise_method(item)
+                meta[key] = serialise_method(item)
 
             if idx < len(args):
                 processed_args.append(item)
             else:
                 processed_kwargs.update({key: item})
 
+        # Positional arguments beyond the fixed parameters cannot be represented
+        # in the (name-keyed) metadata, so reject them rather than forwarding
+        # them unrecorded or silently dropping them. Built-in flows take their
+        # arguments by keyword.
+        if len(args) > len(meta):
+            raise UnsupportedMethod(
+                f"{method_name}() received {len(args)} positional argument(s) "
+                f"but only {len(meta)} can be serialised; "
+                "pass the remaining argument(s) by keyword"
+            )
+
+        # Forward any genuine variadic keyword arguments (e.g. planar_flow's
+        # ``**mlp_kwargs``) and record them under the variadic parameter's name,
+        # so that they round-trip through the corresponding spec (e.g.
+        # ``PlanarFlowSpec.mlp_kwargs``). Unexpected arguments to a flow without
+        # ``**kwargs`` are rejected rather than silently dropped.
+        extra = {key: value for key, value in kwargs.items() if key not in meta}
+        if extra:
+            if var_keyword is None:
+                raise UnsupportedMethod(f"unexpected argument(s): {sorted(extra)}")
+            meta[var_keyword] = dict(extra)
+            processed_kwargs.update(extra)
+
         return FlowLikelihood(
-            model=method(*processed_args, **processed_kwargs), metadata=serialised_method
+            model=method(*processed_args, **processed_kwargs),
+            metadata={method_name: meta},
         )
 
     wrapper.__annotations__["return"] = FlowLikelihood
