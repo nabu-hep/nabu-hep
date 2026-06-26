@@ -202,6 +202,46 @@ def _check_weights(data: np.ndarray, weights: np.ndarray) -> np.ndarray:
     return weights
 
 
+def _weighted_quantile(data: np.ndarray, quantiles, weights: np.ndarray) -> np.ndarray:
+    r"""
+    Weighted quantiles computed per feature via linear interpolation of the
+    weighted ECDF.
+
+    Uses Hazen plotting positions :math:`p_i = (C_i - w_i / 2) / \sum_j w_j`, where
+    :math:`C_i` is the cumulative weight up to the (sorted) sample :math:`i`. With
+    uniform weights this matches ``numpy.quantile(..., method="hazen")``; in particular
+    the median (``q = 0.5``) agrees with ``numpy.median``. Samples with zero weight are
+    dropped. Requested quantiles outside the support are clamped to the extreme samples.
+
+    Args:
+        data (``np.ndarray``): dataset with shape (N,) or (N, M).
+        quantiles (``float`` or ``np.ndarray``): quantile(s) in ``[0, 1]``.
+        weights (``np.ndarray``): per-sample weights of length N.
+
+    Returns:
+        ``np.ndarray``:
+        The interpolated quantile(s). For 2D ``data`` the feature axis is last, so a
+        length-K ``quantiles`` yields shape ``(K, M)`` and a scalar yields shape ``(M,)``.
+    """
+    data = np.asarray(data, dtype=float)
+    quantiles = np.asarray(quantiles, dtype=float)
+
+    mask = weights > 0.0
+    data, weights = data[mask], weights[mask]
+    sumw = weights.sum()
+
+    def _col(col: np.ndarray) -> np.ndarray:
+        order = np.argsort(col, kind="mergesort")
+        v, w = col[order], weights[order]
+        # Hazen plotting positions; strictly increasing since all weights are positive.
+        p = (np.cumsum(w) - 0.5 * w) / sumw
+        return np.interp(quantiles, p, v)
+
+    if data.ndim == 1:
+        return _col(data)
+    return np.stack([_col(data[:, j]) for j in range(data.shape[1])], axis=-1)
+
+
 def standardise_dalitz(
     data: np.ndarray,
     md: float = 1e-3,
@@ -289,20 +329,30 @@ def standardise_between_negone_and_one(
 
 def standardise_median_quantile(
     data: np.ndarray,
+    weights: np.ndarray = None,
 ) -> tuple[PosteriorTransform, np.ndarray]:
     r"""
     Shift and scale the data using median and :math:`1\sigma` quantile
 
     Args:
         data (``np.ndarray``): dataset with shape (N, M). N=number of data, M=number of features
+        weights (``np.ndarray``, default ``None``): per-sample weights of length N. If
+            ``None``, the unweighted median and quantiles are used. Otherwise the shift is
+            the weighted median and the scale is the weighted :math:`1\sigma` inter-quantile
+            range, so the embedded transform centres and scales a weighted target correctly.
 
     Returns:
         ``Tuple[PosteriorTransform, np.ndarray]``:
         Transform function and standardised data.
     """
     q = (1 - (norm.cdf(1) - norm.cdf(-1))) / 2
-    mean = np.median(data, axis=0)
-    scale = np.quantile(data, 1 - q, axis=0) - np.quantile(data, q, axis=0)
+    if weights is None:
+        mean = np.median(data, axis=0)
+        scale = np.quantile(data, 1 - q, axis=0) - np.quantile(data, q, axis=0)
+    else:
+        weights = _check_weights(data, weights)
+        lo, mean, hi = _weighted_quantile(data, [q, 0.5, 1 - q], weights)
+        scale = hi - lo
     return (
         PosteriorTransform.from_shift_scale(shift=mean, scale=scale),
         (data - mean) / scale,
