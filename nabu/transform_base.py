@@ -173,6 +173,35 @@ class PosteriorTransform:
         return jnp.array(self._backward(y))
 
 
+def _check_weights(data: np.ndarray, weights: np.ndarray) -> np.ndarray:
+    """
+    Validate and coerce per-sample weights for the weighted standardisers.
+
+    Args:
+        data (``np.ndarray``): dataset with shape (N, M).
+        weights (``np.ndarray``): per-sample weights of length N.
+
+    Returns:
+        ``np.ndarray``:
+        The weights coerced to a float array.
+    """
+    weights = np.asarray(weights, dtype=float)
+    if weights.ndim != 1:
+        raise ValueError(
+            f"weights must be a 1D array of length {len(data)}, got shape {weights.shape}"
+        )
+    if len(weights) != len(data):
+        raise ValueError(
+            f"data and weights must have the same length, got {len(data)} and "
+            f"{len(weights)}"
+        )
+    if np.any(weights < 0.0):
+        raise ValueError("weights must be non-negative")
+    if not weights.sum() > 0.0:
+        raise ValueError("the total weight must be positive")
+    return weights
+
+
 def standardise_dalitz(
     data: np.ndarray,
     md: float = 1e-3,
@@ -282,19 +311,30 @@ def standardise_median_quantile(
 
 def standardise_mean_std(
     data: np.ndarray,
+    weights: np.ndarray = None,
 ) -> tuple[PosteriorTransform, np.ndarray]:
     """
     Shift and scale the data using mean and standard deviation
 
     Args:
         data (``np.ndarray``): dataset with shape (N, M). N=number of data, M=number of features
+        weights (``np.ndarray``, default ``None``): per-sample weights of length N. If
+            ``None``, the unweighted mean and standard deviation are used. Otherwise the
+            shift is the weighted mean and the scale is the (population) weighted
+            standard deviation, so the embedded transform centres and scales a weighted
+            target correctly.
 
     Returns:
         ``Tuple[PosteriorTransform, np.ndarray]``:
         Transform function and standardised data.
     """
-    mean = np.mean(data, axis=0)
-    scale = np.std(data, axis=0)
+    if weights is None:
+        mean = np.mean(data, axis=0)
+        scale = np.std(data, axis=0)
+    else:
+        weights = _check_weights(data, weights)
+        mean = np.average(data, axis=0, weights=weights)
+        scale = np.sqrt(np.average((data - mean) ** 2, axis=0, weights=weights))
     return (
         PosteriorTransform.from_shift_scale(shift=mean, scale=scale),
         (data - mean) / scale,
