@@ -181,7 +181,7 @@ jobs:
       - name: Debug
         run: ls -l dist
 
-      - uses: pypa/gh-action-pypi-publish@v1.14.0
+      - uses: pypa/gh-action-pypi-publish@v1.14.3
         with:
          user:     ${{ secrets.TWINE_USERNAME }}
          password: ${{ secrets.TWINE_PASSWORD }}
